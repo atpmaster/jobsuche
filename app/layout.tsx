@@ -6,8 +6,8 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Ahmet Tepe | Kariyer Komuta Merkezi",
-  description: "İş başvuruları, günlük görevler ve vatandaşlık hedefi için kişisel takip sistemi.",
+  title: "Başvuru Merkezi | Ahmet Tepe",
+  description: "Ahmet Tepe'nin iş başvurularını, başvuru adımlarını ve geri dönüşlerini canlı takip ettiği kişisel çalışma alanı.",
   icons: { icon: "/favicon.svg" },
 };
 

@@ -40,3 +40,9 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+# personal application records and generated documents
+/data/
+/output/
+/tmp/
+/.openai/site-build.tar.gz
