@@ -105,13 +105,49 @@ async function prepareDb() {
       nextActionDate: "2026-09-16",
       feedback: "Otomatik alındı teyidi: belgeler dikkatle inceleniyor.",
     },
+    {
+      company: "BBS I des Landkreises Gifhorn",
+      role: "Theorielehrkraft Mathematik & Informatik",
+      track: "teaching",
+      location: "Gifhorn",
+      score: 96,
+      status: "applied",
+      appliedOn: "2026-09-11",
+      source: "EIS-Online-BBS / E-Mail",
+      url: "https://www.eis-online-bbs.niedersachsen.de/",
+      notes: "Stellennummer 18049-26 · unterschriebener Bewerbungsbogen und aktualisierte Unterlagen nachgereicht.",
+      nextAction: "Eingangsbestätigung prüfen",
+      nextActionDate: "2026-09-18",
+      contactName: "Bianca Brauns",
+      contactEmail: "verwaltung@bbs1-gifhorn.de",
+      feedback: "Bewerbung und 18-seitige Unterlagen per E-Mail versendet; Rückmeldung ausstehend.",
+    },
   ];
 
   for (const seed of seeds) {
-    await db.prepare(`INSERT INTO applications (company, role, track, location, score, status, applied_on, source, url, notes, next_action, next_action_date, feedback)
-      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    await db.prepare(`INSERT INTO applications (company, role, track, location, score, status, applied_on, source, url, notes, next_action, next_action_date, feedback, contact_name, contact_email)
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       WHERE NOT EXISTS (SELECT 1 FROM applications WHERE company = ? AND role = ?)`)
-      .bind(seed.company, seed.role, seed.track, seed.location, seed.score, seed.status, seed.appliedOn, seed.source, seed.url, seed.notes, seed.nextAction, seed.nextActionDate, seed.feedback ?? null, seed.company, seed.role)
+      .bind(seed.company, seed.role, seed.track, seed.location, seed.score, seed.status, seed.appliedOn, seed.source, seed.url, seed.notes, seed.nextAction, seed.nextActionDate, seed.feedback ?? null, seed.contactName ?? null, seed.contactEmail ?? null, seed.company, seed.role)
+      .run();
+  }
+
+  const bbsApplication = await db.prepare("SELECT id FROM applications WHERE company = ? AND role = ?")
+    .bind("BBS I des Landkreises Gifhorn", "Theorielehrkraft Mathematik & Informatik")
+    .first<{ id: number }>();
+  if (bbsApplication?.id) {
+    await db.prepare(`INSERT INTO application_updates (application_id, update_type, title, body, happened_on)
+      SELECT ?, ?, ?, ?, ?
+      WHERE NOT EXISTS (SELECT 1 FROM application_updates WHERE application_id = ? AND title = ?)`)
+      .bind(
+        bbsApplication.id,
+        "E-posta",
+        "Bewerbungsbogen und Unterlagen versendet",
+        "Unterschriebener EIS-Bewerbungsbogen und aktualisierte 18-seitige PDF-Unterlagen an die BBS I Gifhorn gesendet.",
+        "2026-09-11",
+        bbsApplication.id,
+        "Bewerbungsbogen und Unterlagen versendet",
+      )
       .run();
   }
 
