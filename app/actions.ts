@@ -2,8 +2,10 @@
 
 import { env } from "cloudflare:workers";
 import { revalidatePath } from "next/cache";
+import { isDuplicate } from "./record-utils";
 
 type Application = {
+  deletedAt: string | null;
   id: number;
   company: string;
   role: string;
@@ -174,7 +176,7 @@ async function prepareDb() {
 export async function getDashboardData() {
   const db = await prepareDb();
   const [apps, tasks, updates, steps] = await Promise.all([
-    db.prepare(`SELECT id, company, role, track, location, score, status, deadline, url, notes, source, applied_on AS appliedOn, contact_name AS contactName, contact_email AS contactEmail, contact_phone AS contactPhone, last_contact_on AS lastContactOn, next_action AS nextAction, next_action_date AS nextActionDate, feedback
+    db.prepare(`SELECT id, deleted_at AS deletedAt, company, role, track, location, score, status, deadline, url, notes, source, applied_on AS appliedOn, contact_name AS contactName, contact_email AS contactEmail, contact_phone AS contactPhone, last_contact_on AS lastContactOn, next_action AS nextAction, next_action_date AS nextActionDate, feedback
       FROM applications ORDER BY CASE status WHEN 'interview' THEN 1 WHEN 'offer' THEN 2 WHEN 'preparing' THEN 3 WHEN 'applied' THEN 4 WHEN 'saved' THEN 5 ELSE 6 END, COALESCE(next_action_date, deadline, applied_on, created_at) ASC`).all<Application>(),
     db.prepare("SELECT id, title, category, estimate, done FROM tasks ORDER BY done ASC, sort_order ASC, id ASC LIMIT 8").all<Task>(),
     db.prepare("SELECT id, application_id AS applicationId, update_type AS updateType, title, body, happened_on AS happenedOn FROM application_updates ORDER BY happened_on DESC, id DESC").all<{ id: number; applicationId: number; updateType: string; title: string; body: string | null; happenedOn: string }>(),
@@ -193,6 +195,10 @@ export async function getDashboardData() {
 
 export async function addApplication(formData: FormData) {
   const db = await prepareDb();
+  const candidate = { company: String(formData.get("company") || "").trim(), role: String(formData.get("role") || "").trim() };
+  if (!candidate.company || !candidate.role) throw new Error("INVALID_INPUT");
+  const existing = await db.prepare("SELECT company, role, notes FROM applications").all<{company: string; role: string; notes: string|null}>();
+  if (existing.results.some(item => isDuplicate(item, candidate))) throw new Error("DUPLICATE_APPLICATION");
   const score = Math.max(0, Math.min(100, Number(formData.get("score")) || 50));
   const status = statuses.has(String(formData.get("status"))) ? String(formData.get("status")) : "saved";
   await db.prepare(`INSERT INTO applications (company, role, track, location, score, status, deadline, url, notes, source, applied_on, contact_name, contact_email, contact_phone, next_action, next_action_date)
@@ -237,11 +243,21 @@ export async function addApplicationUpdate(formData: FormData) {
 export async function deleteApplication(formData: FormData) {
   const db = await prepareDb();
   const id = Number(formData.get("id"));
-  await db.batch([
-    db.prepare("DELETE FROM application_steps WHERE application_id = ?").bind(id),
-    db.prepare("DELETE FROM application_updates WHERE application_id = ?").bind(id),
-    db.prepare("DELETE FROM applications WHERE id = ?").bind(id),
-  ]);
+  await db.prepare("UPDATE applications SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL").bind(id).run();
+  revalidatePath("/");
+}
+
+export async function restoreApplication(formData: FormData) {
+  const db = await prepareDb();
+  await db.prepare("UPDATE applications SET deleted_at = NULL WHERE id = ?").bind(Number(formData.get("id"))).run();
+  revalidatePath("/");
+}
+
+export async function correctApplicationDate(formData: FormData) {
+  const date = String(formData.get("appliedOn") || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date))) throw new Error("INVALID_DATE");
+  const db = await prepareDb();
+  await db.prepare("UPDATE applications SET applied_on = ? WHERE id = ? AND deleted_at IS NULL").bind(date, Number(formData.get("id"))).run();
   revalidatePath("/");
 }
 

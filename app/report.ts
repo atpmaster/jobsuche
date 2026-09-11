@@ -37,6 +37,18 @@ export async function buildReport(rows: ReportRow[], language: "tr" | "de", date
     doc.text(de ? "Nachweis der Bewerbungsaktivitäten" : "İş Başvuruları Raporu", 14, 26);
     doc.setFontSize(10); doc.text("Ahmet Tepe", 14, 35);
     doc.setFont("NotoSans", "normal"); doc.setTextColor(85, 99, 117); doc.setFontSize(9);
+    const fx = 247, fy = 31, fw = 9, fh = 6;
+    if (de) {
+      [[0,0,0],[221,0,0],[255,206,0]].forEach((rgb, i) => { doc.setFillColor(rgb[0],rgb[1],rgb[2]); doc.rect(fx,fy+i*fh/3,fw,fh/3,"F"); });
+    } else {
+      doc.setFillColor(227,10,23); doc.rect(fx,fy,fw,fh,"F");
+      doc.setFillColor(255,255,255); doc.circle(fx+3.3,fy+3,1.5,"F");
+      doc.setFillColor(227,10,23); doc.circle(fx+3.69,fy+3,1.2,"F");
+      const points = Array.from({length:10},(_,i)=>{const angle=Math.PI+i*Math.PI/5;const radius=i%2?0.286:0.75;return [fx+5.58+Math.cos(angle)*radius,fy+3+Math.sin(angle)*radius];});
+      doc.setFillColor(255,255,255);
+      for(let i=0;i<10;i++) doc.triangle(fx+5.58,fy+3,points[i][0],points[i][1],points[(i+1)%10][0],points[(i+1)%10][1],"F");
+    }
+    doc.text(de ? "Deutsch" : "Türkçe", fx+12, fy+4.3);
     doc.text(`${de ? "Stand" : "Rapor tarihi"}: ${date}`, 283, 26, { align: "right" });
     doc.text(`${rows.length} ${de ? "dokumentierte Einträge" : "kayıt"}  |  ${de ? "Zur Vorlage beim Jobcenter" : "Jobcenter'a sunulmak üzere"}`, 14, 41);
     doc.setDrawColor(210, 220, 230); doc.setLineWidth(0.2); doc.line(14, 194, 283, 194);
