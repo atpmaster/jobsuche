@@ -1,0 +1,192 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { addApplication, addApplicationUpdate, addTask, deleteApplication, updateApplicationStatus, updateApplicationStep, updateTask } from "./actions";
+import { LiveRefresh } from "./live-refresh";
+
+type Language = "tr" | "de";
+type Step = { id: number; label: string; done: number };
+type Update = { id: number; updateType: string; title: string; body: string | null; happenedOn: string };
+type Application = {
+  id: number; company: string; role: string; track: string; location: string | null; score: number; status: string;
+  deadline: string | null; url: string | null; notes: string | null; source: string | null; appliedOn: string | null;
+  contactName: string | null; contactEmail: string | null; contactPhone: string | null; lastContactOn: string | null;
+  nextAction: string | null; nextActionDate: string | null; feedback: string | null; steps: Step[]; updates: Update[];
+};
+type Task = { id: number; title: string; category: string; estimate: string; done: number };
+type DashboardProps = { applications: Application[]; tasks: Task[]; today: string };
+
+const copy = {
+  tr: {
+    languageName: "Türkçe", languageShort: "TR", area: "Çalışma alanı", files: "Dosyalar", followUp: "Takip", tasks: "Görevler", journal: "Günlük", live: "Canlı kayıt", lastCheck: "Son kontrol", searchArea: "İş arama", title: "Başvuru dosyaları", intro: "İlanları, görüşmeleri ve sıradaki adımları tek yerde tut.", newApplication: "Yeni başvuru", addToFile: "Dosyaya ekle", newOpportunity: "Yeni fırsat", saveOpportunityHint: "Takipte kalmak istediğin ilanı kaydet.", openFiles: "Açık dosyalar", open: "açık", awaiting: "yanıt bekleyen", advanced: "ileri aşama", due: "takip gereken", averageMatch: "ort. uyum", records: "Kayıtlar", applications: "Başvurular", clickToOpen: "Açmak için satıra tıkla", number: "No", jobCompany: "İlan / kurum", source: "Kaynak", status: "Durum", followUpColumn: "Takip", noDate: "Tarih yok", noLocation: "Konum belirtilmedi", noSource: "Manuel kayıt", noNextAction: "Sonraki adım eklenmedi", noContact: "Henüz eklenmedi", noContactInfo: "İletişim bilgisi yok", noFeedback: "Henüz geri dönüş yok", noNote: "Not eklenmedi", updateStatus: "Durumu güncelle", save: "Kaydet", openListing: "İlanı aç", contact: "Muhatap", lastContact: "Son temas", feedback: "Son geri dönüş", steps: "Başvuru adımları", completed: "tamamlandı", timeline: "Zaman çizelgesi", recent: "Son hareketler", noUpdates: "Durum değişikliği veya not eklendiğinde burada görünecek.", updateTitle: "Yeni hareket başlığı", updateBody: "Kısa not veya alınan yanıt", addUpdate: "Güncelleme ekle", delete: "Kaydı sil", priority: "Öncelikli dosya", tracking: "Takip", noPlan: "Planlanmadı", nextStep: "Sonraki adım", lastNote: "Son not", goToDetails: "Dosya ayrıntılarına git", today: "Bugün", noFile: "Henüz dosya yok.", noFileHint: "İlk başvurunu eklediğinde ayrıntıları burada göreceksin.", todo: "Yapılacaklar", addTask: "Yeni görev ekle", add: "Ekle", pdf: "PDF al", pdfHint: "Jobcenter raporu", pdfTitle: "Jobcenter için başvuru özeti", pdfSubtitle: "Ahmet Tepe - başvuru listesi ve güncel durum", generated: "Oluşturulma tarihi", notes: "Not", applicationDate: "Başvuru tarihi", employer: "Kurum / pozisyon", reportStatus: "Güncel durum", reportNext: "Sıradaki adım", reportSource: "Başvuru kaynağı", reportContact: "Muhatap", reportFooter: "Bu rapor, başvuru takibi amacıyla hazırlanmıştır.", all: "Tümü", education: "Eğitim", cyber: "Siber güvenlik", other: "Alternatif", check: "kontrol et", adjust: "uyarla", send: "gönder", record: "kaydet", tomorrow: "Yarın", daysAfter: "gün sonra", daysLate: "gün gecikti", queueClear: "kuyruk temiz", prioritize: "öncelik ver", selectedLanguage: "Dil"
+  },
+  de: {
+    languageName: "Deutsch", languageShort: "DE", area: "Arbeitsbereich", files: "Dateien", followUp: "Nachfassen", tasks: "Aufgaben", journal: "Journal", live: "Live gespeichert", lastCheck: "Letzte Prüfung", searchArea: "Bewerbungen", title: "Bewerbungsdateien", intro: "Stellen, Gespräche und nächste Schritte an einem Ort.", newApplication: "Neue Bewerbung", addToFile: "Zur Datei hinzufügen", newOpportunity: "Neue Stelle", saveOpportunityHint: "Eine interessante Stelle für die Nachverfolgung speichern.", openFiles: "Offene Dateien", open: "offen", awaiting: "Rückmeldung ausstehend", advanced: "in weiterem Prozess", due: "Nachfassen nötig", averageMatch: "Ø Passung", records: "Einträge", applications: "Bewerbungen", clickToOpen: "Zum Öffnen auf eine Zeile klicken", number: "Nr.", jobCompany: "Stelle / Arbeitgeber", source: "Quelle", status: "Status", followUpColumn: "Nachfassen", noDate: "Kein Datum", noLocation: "Ort nicht angegeben", noSource: "Manueller Eintrag", noNextAction: "Kein nächster Schritt", noContact: "Noch nicht ergänzt", noContactInfo: "Keine Kontaktdaten", noFeedback: "Noch keine Rückmeldung", noNote: "Keine Notiz", updateStatus: "Status aktualisieren", save: "Speichern", openListing: "Stelle öffnen", contact: "Kontakt", lastContact: "Letzter Kontakt", feedback: "Letzte Rückmeldung", steps: "Bewerbungsschritte", completed: "erledigt", timeline: "Zeitleiste", recent: "Letzte Aktivitäten", noUpdates: "Statusänderungen und Notizen erscheinen hier.", updateTitle: "Titel der Aktivität", updateBody: "Kurze Notiz oder erhaltene Antwort", addUpdate: "Aktivität hinzufügen", delete: "Eintrag löschen", priority: "Priorisierte Datei", tracking: "Nachfassen", noPlan: "Nicht geplant", nextStep: "Nächster Schritt", lastNote: "Letzte Notiz", goToDetails: "Dateidetails öffnen", today: "Heute", noFile: "Noch keine Datei.", noFileHint: "Nach dem Hinzufügen einer Bewerbung erscheinen die Details hier.", todo: "Aufgaben", addTask: "Neue Aufgabe hinzufügen", add: "Hinzufügen", pdf: "PDF erstellen", pdfHint: "Jobcenter-Bericht", pdfTitle: "Bewerbungsübersicht für das Jobcenter", pdfSubtitle: "Ahmet Tepe - Bewerbungsliste und aktueller Stand", generated: "Erstellt am", notes: "Notiz", applicationDate: "Bewerbung am", employer: "Arbeitgeber / Stelle", reportStatus: "Aktueller Status", reportNext: "Nächster Schritt", reportSource: "Quelle", reportContact: "Kontakt", reportFooter: "Dieser Bericht wurde zur Dokumentation der Bewerbungsaktivitäten erstellt.", all: "Alle", education: "Bildung", cyber: "Cybersecurity", other: "Sonstige", check: "prüfen", adjust: "anpassen", send: "senden", record: "dokumentieren", tomorrow: "Morgen", daysAfter: "Tage", daysLate: "Tage überfällig", queueClear: "keine offenen Nachfassungen", prioritize: "Priorität geben", selectedLanguage: "Sprache"
+  }
+} as const;
+
+const statusLabels: Record<Language, Record<string, string>> = {
+  tr: { saved: "Kaydedildi", preparing: "Hazırlanıyor", applied: "Gönderildi", interview: "Mülakat", offer: "Teklif", rejected: "Olumsuz", withdrawn: "Vazgeçildi" },
+  de: { saved: "Gespeichert", preparing: "Vorbereitung", applied: "Gesendet", interview: "Vorstellungsgespräch", offer: "Angebot", rejected: "Absage", withdrawn: "Zurückgezogen" },
+};
+const statusOrder = ["saved", "preparing", "applied", "interview", "offer", "rejected", "withdrawn"];
+const trackLabels: Record<Language, Record<string, string>> = { tr: { teaching: "Eğitim", cyber: "Siber güvenlik", other: "Alternatif" }, de: { teaching: "Bildung", cyber: "Cybersecurity", other: "Sonstige" } };
+const updateTypeOptions: Record<Language, Array<{ value: string; label: string }>> = { tr: [{ value: "Not", label: "Not" }, { value: "E-posta", label: "E-posta" }, { value: "Telefon", label: "Telefon" }, { value: "Mülakat", label: "Mülakat" }, { value: "Durum", label: "Durum" }], de: [{ value: "Notiz", label: "Notiz" }, { value: "E-Mail", label: "E-Mail" }, { value: "Telefon", label: "Telefon" }, { value: "Vorstellungsgespräch", label: "Vorstellungsgespräch" }, { value: "Status", label: "Status" }] };
+const statusForLanguage = (language: Language) => statusLabels[language];
+
+function formatDate(value: string | null | undefined, language: Language, long = false) {
+  if (!value) return copy[language].noDate;
+  return new Intl.DateTimeFormat(language === "de" ? "de-DE" : "tr-TR", { day: "2-digit", month: long ? "long" : "short", year: long ? "numeric" : undefined }).format(new Date(`${value}T12:00:00`));
+}
+
+function daysUntil(value: string | null | undefined, today: string) {
+  if (!value) return null;
+  return Math.round((Date.parse(`${value}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / 86400000);
+}
+
+function relativeDate(value: string | null | undefined, today: string, language: Language) {
+  const days = daysUntil(value, today);
+  const t = copy[language];
+  if (days === null) return t.noPlan;
+  if (days < 0) return `${Math.abs(days)} ${t.daysLate}`;
+  if (days === 0) return t.today;
+  if (days === 1) return language === "de" ? t.tomorrow : t.tomorrow;
+  return language === "de" ? `${days} ${t.daysAfter}` : `${days} ${t.daysAfter}`;
+}
+
+function initials(value: string) {
+  return value.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+}
+
+function localizedStep(label: string, language: Language) {
+  const translations: Record<string, Record<Language, string>> = {
+    "İlanı ve şartları kontrol et": { tr: "İlanı ve şartları kontrol et", de: "Stellenanzeige und Anforderungen prüfen" },
+    "CV ve Anschreiben uyarla": { tr: "CV ve ön yazıyı uyarla", de: "CV und Anschreiben anpassen" },
+    "Başvuruyu gönder": { tr: "Başvuruyu gönder", de: "Bewerbung versenden" },
+    "Geri dönüşü kaydet": { tr: "Geri dönüşü kaydet", de: "Rückmeldung dokumentieren" },
+  };
+  return translations[label]?.[language] ?? label;
+}
+
+function localizedTask(value: string, language: Language) {
+  const translations: Record<string, Record<Language, string>> = {
+    "Takip tarihi gelen başvuruları kontrol et": { tr: value, de: "Bewerbungen mit fälligem Nachfassen prüfen" },
+    "En yüksek puanlı ilana CV'yi uyarlayıp gönder": { tr: value, de: "CV auf passendste Stelle anpassen und senden" },
+    "Almanca mülakat cevabını sesli prova et": { tr: value, de: "Antwort für Vorstellungsgespräch auf Deutsch üben" },
+  };
+  return translations[value]?.[language] ?? value;
+}
+
+function localizedCategory(value: string, language: Language) {
+  if (language === "tr") return value;
+  return { Takip: "Nachfassen", Başvuru: "Bewerbung", Almanca: "Deutsch", Kariyer: "Karriere" }[value] ?? value;
+}
+
+function localizedContent(value: string | null | undefined, language: Language) {
+  if (!value) return value;
+  const translations: Record<string, Record<Language, string>> = {
+    "20–40 saat; başvuru portalında tamamlandı.": { tr: "20–40 saat; başvuru portalında tamamlandı.", de: "20–40 Stunden; im Bewerbungsportal abgeschlossen." },
+    "Vollzeit, ab sofort; portalda başarıyla gönderildi.": { tr: "Tam zamanlı, hemen başlayabilecek; portal üzerinden başarıyla gönderildi.", de: "Vollzeit, ab sofort; erfolgreich über das Portal gesendet." },
+    "Başvuru alındı teyidi geldi; Personalteam incelemesinden sonra dönüş yapılacak.": { tr: "Başvuru alındı teyidi geldi; Personel ekibinin incelemesinden sonra dönüş yapılacak.", de: "Eingangsbestätigung erhalten; Rückmeldung nach Prüfung durch das Personalteam." },
+    "Stellennummer 18049-26 · unterschriebener Bewerbungsbogen und aktualisierte Unterlagen nachgereicht.": { tr: "İlan numarası 18049-26 · imzalı başvuru formu ve güncellenmiş belgeler sonradan gönderildi.", de: "Stellennummer 18049-26 · unterschriebener Bewerbungsbogen und aktualisierte Unterlagen nachgereicht." },
+    "Otomatik alındı teyidi: belgeler dikkatle inceleniyor.": { tr: "Otomatik alındı teyidi: belgeler dikkatle inceleniyor.", de: "Automatische Eingangsbestätigung: Die Unterlagen werden sorgfältig geprüft." },
+    "Bewerbung und 18-seitige Unterlagen per E-Mail versendet; Rückmeldung ausstehend.": { tr: "Başvuru ve 18 sayfalık belgeler e-posta ile gönderildi; geri dönüş bekleniyor.", de: "Bewerbung und 18-seitige Unterlagen per E-Mail versendet; Rückmeldung ausstehend." },
+    "Geri dönüşü kontrol et": { tr: "Geri dönüşü kontrol et", de: "Rückmeldung prüfen" },
+    "Başvuru teyidini ve açık pozisyonları izle": { tr: "Başvuru teyidini ve açık pozisyonları izle", de: "Eingangsbestätigung und offene Stellen beobachten" },
+    "Yanıt için takip tarihi geldiğinde kontrol et": { tr: "Yanıt için takip tarihi geldiğinde kontrol et", de: "Zum Nachfassdatum auf Rückmeldung prüfen" },
+    "Eingangsbestätigung prüfen": { tr: "Başvuru alındı teyidini kontrol et", de: "Eingangsbestätigung prüfen" },
+    "Bewerbungsbogen und Unterlagen versendet": { tr: "Başvuru formu ve belgeler gönderildi", de: "Bewerbungsbogen und Unterlagen versendet" },
+    "Unterschriebener EIS-Bewerbungsbogen und aktualisierte 18-seitige PDF-Unterlagen an die BBS I Gifhorn gesendet.": { tr: "İmzalı EIS başvuru formu ve güncellenmiş 18 sayfalık PDF belgeleri BBS I Gifhorn'a gönderildi.", de: "Unterschriebener EIS-Bewerbungsbogen und aktualisierte 18-seitige PDF-Unterlagen an die BBS I Gifhorn gesendet." },
+  };
+  return translations[value]?.[language] ?? value;
+}
+
+export function Dashboard({ applications, tasks, today }: DashboardProps) {
+  const [language, setLanguage] = useState<Language>("tr");
+  const t = copy[language];
+  const statuses = statusForLanguage(language);
+  const locale = language === "de" ? "de-DE" : "tr-TR";
+  const todayLabel = new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date(`${today}T12:00:00`));
+  const openStatuses = new Set(["saved", "preparing", "applied", "interview"]);
+  const active = applications.filter((item) => openStatuses.has(item.status));
+  const awaiting = applications.filter((item) => ["applied", "interview"].includes(item.status));
+  const inMotion = applications.filter((item) => ["interview", "offer"].includes(item.status));
+  const followUps = applications.filter((item) => item.nextActionDate && item.nextActionDate <= today && openStatuses.has(item.status));
+  const completedTasks = tasks.filter((task) => task.done).length;
+  const avgScore = applications.length ? Math.round(applications.reduce((sum, item) => sum + item.score, 0) / applications.length) : 0;
+  const priority = followUps[0] ?? [...active].sort((a, b) => b.score - a.score)[0];
+  const recentUpdates = applications.flatMap((application) => application.updates.map((update) => ({ ...update, applicationName: application.company, applicationId: application.id }))).sort((a, b) => b.happenedOn.localeCompare(a.happenedOn)).slice(0, 5);
+
+  useEffect(() => {
+    document.documentElement.lang = language;
+    document.title = language === "de" ? "Bewerbungszentrum | Ahmet Tepe" : "Başvuru Takip Merkezi | Ahmet Tepe";
+  }, [language]);
+
+  const changeLanguage = (next: Language) => setLanguage(next);
+  const printReport = () => window.print();
+
+  return (
+    <main className="file-manager" data-language={language}>
+      <div className="screen-ui">
+        <aside className="side-rail">
+          <div className="rail-brand"><span className="brand-mark">AT</span><span><strong>Ahmet Tepe</strong><small>{language === "de" ? "Bewerbungsdatei" : "iş arama dosyası"}</small></span></div>
+          <div className="rail-rule" />
+          <nav aria-label={t.area}>
+            <p className="rail-label">{t.area}</p>
+            <a className="rail-link active" href="#basvurular"><span>01</span> {t.files} <b>{applications.length}</b></a>
+            <a className="rail-link" href="#takip"><span>02</span> {t.followUp} <b className={followUps.length ? "alert-count" : ""}>{followUps.length}</b></a>
+            <a className="rail-link" href="#gorevler"><span>03</span> {t.tasks} <b>{tasks.length - completedTasks}</b></a>
+            <a className="rail-link" href="#gunluk"><span>04</span> {t.journal}</a>
+          </nav>
+          <div className="rail-footer"><span className="live-dot" /> <strong>{t.live}</strong><p>{t.lastCheck}<br />{formatDate(today, language, true)}</p></div>
+        </aside>
+
+        <section className="workspace">
+          <header className="workspace-header">
+            <div><p className="breadcrumb">AHMET TEPE <span>/</span> {t.searchArea}</p><h1>{t.title}<span>.</span></h1><p className="workspace-intro">{t.intro}</p></div>
+            <div className="header-actions"><div className="language-switcher" aria-label={t.selectedLanguage}><span>{t.selectedLanguage}</span><button className={language === "tr" ? "selected" : ""} type="button" onClick={() => changeLanguage("tr")} aria-pressed={language === "tr"}>TR</button><button className={language === "de" ? "selected" : ""} type="button" onClick={() => changeLanguage("de")} aria-pressed={language === "de"}>DE</button></div><button className="report-button" type="button" onClick={printReport}><span>↓</span><strong>{t.pdf}</strong><small>{t.pdfHint}</small></button><LiveRefresh language={language} /><details className="add-menu"><summary><span>＋</span> {t.newApplication}</summary><div className="form-popover">
+              <div className="popover-head"><div><p className="eyebrow">{t.addToFile}</p><h3>{t.newOpportunity}</h3><p>{t.saveOpportunityHint}</p></div><span className="popover-number">+</span></div>
+              <form action={addApplication}>
+                <div className="form-row"><label>{language === "de" ? "Arbeitgeber" : "Şirket / kurum"}<input name="company" required placeholder={language === "de" ? "z. B. Landkreis Gifhorn" : "Örn. Landkreis Gifhorn"} /></label><label>{language === "de" ? "Position" : "Pozisyon"}<input name="role" required placeholder={language === "de" ? "z. B. Mathematiklehrer" : "Örn. Mathematiklehrer"} /></label></div>
+                <div className="form-row"><label>{language === "de" ? "Bereich" : "Alan"}<select name="track"><option value="teaching">{trackLabels[language].teaching}</option><option value="cyber">{trackLabels[language].cyber}</option><option value="other">{trackLabels[language].other}</option></select></label><label>{language === "de" ? "Passung" : "Uygunluk"}<input name="score" type="number" min="0" max="100" defaultValue="80" /></label></div>
+                <div className="form-row"><label>{t.source}<input name="source" placeholder={language === "de" ? "Arbeitsagentur, LinkedIn ..." : "Arbeitsagentur, LinkedIn…"} /></label><label>{language === "de" ? "Ort" : "Konum"}<input name="location" placeholder="Gifhorn" /></label></div>
+                <div className="form-row"><label>{language === "de" ? "Bewerbung am" : "Başvuru tarihi"}<input name="appliedOn" type="date" /></label><label>{language === "de" ? "Nachfassen am" : "Takip tarihi"}<input name="nextActionDate" type="date" /></label></div>
+                <label>{language === "de" ? "Stellenlink" : "İlan bağlantısı"}<input name="url" type="url" placeholder="https://…" /></label>
+                <label>{t.nextStep}<input name="nextAction" placeholder={language === "de" ? "z. B. In 7 Tagen E-Mail prüfen" : "Örn. 7 gün sonra e-posta kontrolü"} /></label>
+                <div className="form-row"><label>{t.contact}<input name="contactName" placeholder={language === "de" ? "Name" : "Ad soyad"} /></label><label>{language === "de" ? "E-Mail" : "E-posta"}<input name="contactEmail" type="email" placeholder="name@institution.de" /></label></div>
+                <label>{language === "de" ? "Notiz / Bedingungen" : "Not / şartlar"}<textarea name="notes" placeholder={language === "de" ? "Anforderungen, Unterlagen, Erinnerungen ..." : "İlan şartları, belgeler, hatırlatmalar…"} /></label>
+                <button type="submit">{language === "de" ? "Bewerbung speichern" : "Başvuruyu kaydet"} <span>↗</span></button>
+              </form>
+            </div></details></div>
+          </header>
+
+          <div className="file-toolbar" id="takip"><div className="toolbar-title"><span className="folder-tab">A</span><strong>{t.openFiles}</strong><b>{applications.length}</b></div><div className="toolbar-stats"><span><strong>{active.length}</strong> {t.open}</span><span><strong>{awaiting.length}</strong> {t.awaiting}</span><span><strong>{inMotion.length}</strong> {t.advanced}</span><span className={followUps.length ? "is-alert" : ""}><strong>{followUps.length}</strong> {t.due}</span><span><strong>%{avgScore}</strong> {t.averageMatch}</span></div><span className="toolbar-date">{todayLabel}</span></div>
+
+          <div className="file-layout">
+            <section className="file-list" id="basvurular" aria-label={language === "de" ? "Bewerbungsverfolgung" : "Başvuru takibi"}>
+              <div className="list-intro"><div><p className="eyebrow"><span className="eyebrow-line" /> {t.records}</p><h2>{t.applications}</h2></div><span className="list-note">{t.clickToOpen}</span></div>
+              <div className="list-head"><span>{t.number}</span><span></span><span>{t.jobCompany}</span><span>{t.source}</span><span>{t.status}</span><span>{t.followUpColumn}</span><span></span></div>
+              {applications.map((item, index) => {
+                const due = Boolean(item.nextActionDate && item.nextActionDate <= today && openStatuses.has(item.status));
+                const doneSteps = item.steps.filter((step) => step.done).length;
+                return <details className={`file-entry ${due ? "is-due" : ""}`} id={`app-${item.id}`} key={item.id} open={due}>
+                  <summary className="file-summary"><span className="file-index">{String(index + 1).padStart(2, "0")}</span><span className={`file-avatar avatar-${item.track}`}>{initials(item.company)}</span><span className="file-main"><strong>{item.role}</strong><small>{item.company} · {item.location || t.noLocation}</small><span className="file-tags"><b className={`track-tag ${item.track}`}>{trackLabels[language][item.track] || trackLabels[language].other}</b><b className={`score-tag ${item.score >= 85 ? "high" : item.score >= 70 ? "mid" : "low"}`}>%{item.score} {language === "de" ? "Passung" : "uyum"}</b></span></span><span className="file-source"><strong>{item.source || t.noSource}</strong><small>{item.appliedOn ? formatDate(item.appliedOn, language) : t.noDate}</small></span><span className={`status-pill ${item.status}`}><i />{statuses[item.status] || item.status}</span><span className={`file-follow ${due ? "due" : ""}`}><strong>{item.nextActionDate ? `${relativeDate(item.nextActionDate, today, language)} · ${formatDate(item.nextActionDate, language)}` : t.noPlan}</strong><small>{localizedContent(item.nextAction, language) || t.noNextAction}</small></span><span className="file-chevron">⌄</span></summary>
+                  <div className="file-detail"><div className="detail-grid"><div className="detail-column"><p className="eyebrow">{t.updateStatus}</p><form action={updateApplicationStatus} className="status-editor"><input type="hidden" name="id" value={item.id} /><select aria-label={`${item.company} ${t.status}`} name="status" defaultValue={item.status}>{statusOrder.map((status) => <option key={status} value={status}>{statuses[status]}</option>)}</select><button type="submit">{t.save}</button></form>{item.url && <a className="job-link" href={item.url} target="_blank" rel="noreferrer">{t.openListing} <span>↗</span></a>}</div><div className="detail-column"><p className="eyebrow">{t.contact}</p><strong>{item.contactName || t.noContact}</strong><small>{item.contactEmail || item.contactPhone || t.noContactInfo}</small>{item.lastContactOn && <small>{t.lastContact}: {formatDate(item.lastContactOn, language)}</small>}</div><div className="detail-column"><p className="eyebrow">{t.feedback}</p><strong>{localizedContent(item.feedback, language) || t.noFeedback}</strong><small>{localizedContent(item.notes, language) || t.noNote}</small></div></div><div className="detail-lower"><div className="checklist"><div className="mini-heading"><div><p className="eyebrow">{t.steps}</p><strong>{doneSteps}/{item.steps.length} {t.completed}</strong></div><span>{item.steps.length ? Math.round(doneSteps / item.steps.length * 100) : 0}%</span></div><div className="step-progress"><i style={{ width: `${item.steps.length ? doneSteps / item.steps.length * 100 : 0}%` }} /></div>{item.steps.map((step) => <form action={updateApplicationStep} key={step.id} className={step.done ? "step done" : "step"}><input type="hidden" name="stepId" value={step.id} /><input type="hidden" name="done" value={step.done ? "0" : "1"} /><button type="submit" aria-label={step.done ? (language === "de" ? "Schritt wieder öffnen" : "Adımı geri aç") : (language === "de" ? "Schritt erledigen" : "Adımı tamamla")}>{step.done ? "✓" : "○"}</button><span>{localizedStep(step.label, language)}</span></form>)}</div><div className="timeline"><div className="mini-heading"><div><p className="eyebrow">{t.timeline}</p><strong>{t.recent}</strong></div><span>{item.updates.length}</span></div>{item.updates.length ? <div className="timeline-list">{item.updates.slice(0, 4).map((update) => <div className="timeline-item" key={update.id}><i className={`timeline-dot ${update.updateType.toLowerCase().replace("-", "")}`} /><div><strong>{localizedContent(update.title, language)}</strong><small>{formatDate(update.happenedOn, language)}{update.body ? ` · ${localizedContent(update.body, language)}` : ""}</small></div></div>)}</div> : <p className="muted-text">{t.noUpdates}</p>}<form action={addApplicationUpdate} className="update-form"><input type="hidden" name="applicationId" value={item.id} /><div className="form-row"><select name="updateType" aria-label={t.updateStatus}>{updateTypeOptions[language].map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><input name="happenedOn" type="date" defaultValue={today} /></div><input name="title" required placeholder={t.updateTitle} /><input name="body" placeholder={t.updateBody} /><button type="submit">＋ {t.addUpdate}</button></form></div></div><div className="detail-footer"><span>{t.source}: {item.source || t.noSource}</span><form action={deleteApplication}><input type="hidden" name="id" value={item.id} /><button className="delete" type="submit">{t.delete}</button></form></div></div>
+                </details>;
+              })}
+              {!applications.length && <div className="empty"><strong>{t.noFile}</strong><span>{t.noFileHint}</span></div>}
+            </section>
+
+            <aside className="inspector-column">
+              {priority ? <section className="inspector-panel"><div className="inspector-heading"><p className="eyebrow"><span className="eyebrow-line" /> {t.priority}</p><span className={`status-pill ${priority.status}`}><i />{statuses[priority.status]}</span></div><h2>{priority.role}</h2><p className="inspector-company">{priority.company} · {priority.location || t.noLocation}</p>{priority.url && <a className="job-link" href={priority.url} target="_blank" rel="noreferrer">{t.openListing} <span>↗</span></a>}<div className="inspector-rule" /><dl className="meta-list"><div><dt>{t.tracking}</dt><dd className={followUps.includes(priority) ? "is-alert" : ""}>{priority.nextActionDate ? `${formatDate(priority.nextActionDate, language, true)} · ${relativeDate(priority.nextActionDate, today, language)}` : t.noPlan}</dd></div><div><dt>{t.source}</dt><dd>{priority.source || t.noSource}</dd></div><div><dt>{t.contact}</dt><dd>{priority.contactName || t.noContact}</dd></div><div><dt>{language === "de" ? "Passung" : "Uyum"}</dt><dd>%{priority.score}</dd></div></dl><div className="inspector-note"><span>{t.lastNote}</span><p>{localizedContent(priority.feedback, language) || localizedContent(priority.notes, language) || t.noNote}</p></div><form action={updateApplicationStatus} className="inspector-status"><input type="hidden" name="id" value={priority.id} /><select aria-label={t.updateStatus} name="status" defaultValue={priority.status}>{statusOrder.map((status) => <option key={status} value={status}>{statuses[status]}</option>)}</select><button type="submit">{t.save}</button></form><a className="inspector-open" href={`#app-${priority.id}`}>{t.goToDetails} <span>↗</span></a></section> : <section className="inspector-panel empty-inspector"><p className="eyebrow">{t.priority}</p><h2>{t.noFile}</h2><p>{t.noFileHint}</p></section>}
+              <section className="side-section" id="gunluk"><div className="side-heading"><div><p className="eyebrow"><span className="eyebrow-line" /> {t.journal}</p><h2>{t.recent}</h2></div><span>{recentUpdates.length}</span></div>{recentUpdates.length ? <div className="activity-list">{recentUpdates.map((update) => <a className="activity-item" href={`#app-${update.applicationId}`} key={`${update.applicationId}-${update.id}`}><span className={`activity-icon ${update.updateType.toLowerCase().replace("-", "")}`}>{update.updateType === "E-posta" || update.updateType === "E-Mail" ? "@" : update.updateType === "Durum" || update.updateType === "Status" ? "↗" : "•"}</span><span><strong>{localizedContent(update.title, language)}</strong><small>{update.applicationName} · {formatDate(update.happenedOn, language)}</small></span></a>)}</div> : <p className="muted-text">{t.noUpdates}</p>}</section>
+              <section className="side-section tasks-section" id="gorevler"><div className="side-heading"><div><p className="eyebrow"><span className="eyebrow-line" /> {t.today}</p><h2>{t.todo}</h2></div><span>{completedTasks}/{tasks.length}</span></div><div className="task-list">{tasks.map((task, index) => <form action={updateTask} key={task.id} className={task.done ? "task done" : "task"}><input type="hidden" name="id" value={task.id} /><input type="hidden" name="done" value={task.done ? "0" : "1"} /><button type="submit" aria-label={task.done ? (language === "de" ? "Aufgabe wieder öffnen" : "Görevi geri aç") : (language === "de" ? "Aufgabe erledigen" : "Görevi tamamla")}>{task.done ? "✓" : String(index + 1).padStart(2, "0")}</button><span><strong>{localizedTask(task.title, language)}</strong><small>{localizedCategory(task.category, language)} · {task.estimate}</small></span></form>)}</div><details className="quick-task"><summary>＋ {t.addTask}</summary><form action={addTask}><input name="title" required placeholder={language === "de" ? "Neue Aufgabe" : "Yeni görev"} /><div className="form-row"><input name="category" placeholder={language === "de" ? "Kategorie" : "Kategori"} /><input name="estimate" placeholder={language === "de" ? "30 Min." : "30 dk"} /></div><button type="submit">{t.add}</button></form></details></section>
+            </aside>
+          </div>
+        </section>
+      </div>
+
+      <section className="print-report" aria-hidden="true"><header className="print-header"><div><p className="print-kicker">{t.pdfTitle}</p><h1>{t.pdfSubtitle}</h1></div><div className="print-meta"><span>{t.generated}</span><strong>{formatDate(today, language, true)}</strong><small>{language === "de" ? "Sprache: Deutsch" : "Dil: Türkçe"}</small></div></header><div className="print-summary"><span><strong>{applications.length}</strong> {t.applications.toLowerCase()}</span><span><strong>{active.length}</strong> {t.open}</span><span><strong>{awaiting.length}</strong> {t.awaiting}</span><span><strong>%{avgScore}</strong> {t.averageMatch}</span></div><table className="print-table"><thead><tr><th>{t.number}</th><th>{t.employer}</th><th>{t.reportSource}</th><th>{t.reportStatus}</th><th>{t.applicationDate}</th><th>{t.reportNext}</th></tr></thead><tbody>{applications.map((item, index) => <tr key={item.id}><td>{String(index + 1).padStart(2, "0")}</td><td><strong>{item.company}</strong><br /><span>{item.role}</span><br /><small>{item.location || t.noLocation}</small></td><td>{item.source || t.noSource}</td><td><span className={`print-status ${item.status}`}>{statuses[item.status] || item.status}</span></td><td>{item.appliedOn ? formatDate(item.appliedOn, language, true) : t.noDate}</td><td>{item.nextActionDate ? `${formatDate(item.nextActionDate, language, true)} - ${localizedContent(item.nextAction, language) || t.noNextAction}` : t.noPlan}</td></tr>)}</tbody></table><section className="print-details"><h2>{language === "de" ? "Hinweise zu den Bewerbungen" : "Başvurular için notlar"}</h2>{applications.map((item) => <article key={item.id}><h3>{item.company} - {item.role}</h3><p><strong>{t.reportContact}:</strong> {item.contactName || t.noContact}{item.contactEmail ? ` · ${item.contactEmail}` : ""}</p><p><strong>{t.notes}:</strong> {localizedContent(item.feedback, language) || localizedContent(item.notes, language) || t.noNote}</p></article>)}</section><footer className="print-footer">{t.reportFooter}</footer></section>
+    </main>
+  );
+}
