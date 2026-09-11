@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { addApplication, addApplicationUpdate, addTask, deleteApplication, updateApplicationStatus, updateApplicationStep, updateTask } from "./actions";
+import { CareerTools, type CareerData } from "./career-tools";
 import { DateEditor } from "./date-editor";
 import { useRouter } from "next/navigation";
 import { isDuplicate, normalize } from "./record-utils";
@@ -11,7 +12,7 @@ import { LiveRefresh } from "./live-refresh";
 type Language = "tr" | "de";
 type Step = { id: number; label: string; done: number };
 type Update = { id: number; updateType: string; title: string; body: string | null; happenedOn: string };
-type Application = {
+export type Application = {
   deletedAt?: string | null;
   id: number; company: string; role: string; track: string; location: string | null; score: number; status: string;
   deadline: string | null; url: string | null; notes: string | null; source: string | null; appliedOn: string | null;
@@ -19,7 +20,7 @@ type Application = {
   nextAction: string | null; nextActionDate: string | null; feedback: string | null; steps: Step[]; updates: Update[];
 };
 type Task = { id: number; title: string; category: string; estimate: string; done: number };
-type DashboardProps = { applications: Application[]; tasks: Task[]; today: string };
+type DashboardProps = { applications: Application[]; tasks: Task[]; today: string; career: CareerData };
 
 const copy = {
   tr: {
@@ -165,9 +166,15 @@ function followUpKey(application: Application) {
   return `${application.id}:${application.nextActionDate ?? ""}`;
 }
 
-export function Dashboard({ applications: allApplications, tasks, today }: DashboardProps) {
-  const applications = allApplications.filter(item => !item.deletedAt);
-  const trash = allApplications.filter(item => item.deletedAt);
+export function Dashboard({ applications: allApplications, tasks, today, career }: DashboardProps) {
+  const applications = allApplications.filter(item => !item.deletedAt).map(item => {
+    const sources=allApplications.filter(a=>career.merges.some(m=>m.sourceId===a.id&&m.targetId===item.id));
+    const dates=[item,...sources].map(a=>a.appliedOn).filter((d):d is string=>!!d).sort();
+    return {...item,appliedOn:dates[0]||null,updates:[...item.updates,...sources.flatMap(a=>a.updates)].sort((a,b)=>b.happenedOn.localeCompare(a.happenedOn)),steps:[...item.steps,...sources.flatMap(a=>a.steps)].filter((step,index,all)=>all.findIndex(s=>s.label===step.label)===index).map(step=>({...step,done:Math.max(...[...item.steps,...sources.flatMap(a=>a.steps)].filter(s=>s.label===step.label).map(s=>s.done))}))};
+  });
+  const trash = allApplications.filter(item => item.deletedAt && !career.merges.some(m=>m.sourceId===item.id));
+  const [customerNumber,setCustomerNumber]=useState("");
+  const [signature,setSignature]=useState(false);
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
@@ -203,7 +210,7 @@ export function Dashboard({ applications: allApplications, tasks, today }: Dashb
   const filtered = applications.filter(item => (!query || normalize([item.company,item.role,item.location].join(" ")).includes(normalize(query))) && (!filterStatus || item.status === filterStatus) && (!filterTrack || item.track === filterTrack) && (!dateFrom || !!item.appliedOn && item.appliedOn >= dateFrom) && (!dateTo || !!item.appliedOn && item.appliedOn <= dateTo));
   const invalidRange = !!dateFrom && !!dateTo && dateFrom > dateTo;
   const exportBackup = () => {
-    const url = URL.createObjectURL(new Blob([JSON.stringify({schemaVersion:1, exportedAt:new Date().toISOString(), applications:allApplications,tasks},null,2)],{type:"application/json"}));
+    const url = URL.createObjectURL(new Blob([JSON.stringify({schemaVersion:1, exportedAt:new Date().toISOString(), applications:allApplications,tasks,career},null,2)],{type:"application/json"}));
     const a=document.createElement("a"); a.href=url; a.download=`Ahmet-Tepe-backup-${today}.json`; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
   const saveApplication = async (data: FormData) => {
@@ -226,7 +233,9 @@ export function Dashboard({ applications: allApplications, tasks, today }: Dashb
         source: item.source || t.noSource, status: statuses[item.status] || item.status,
         next: [item.nextActionDate ? new Intl.DateTimeFormat(locale).format(new Date(`${item.nextActionDate}T12:00:00`)) : "", localizedContent(item.nextAction, language) || t.noNextAction].filter(Boolean).join("\n"),
       }));
-      const doc = await buildReport(rows, language, formatDate(today, language, true));
+      const period=[dateFrom||"…",dateTo||"…"].join(" – ");
+      const reportScope=[language==="de"?"Zeitraum: ":"Dönem: ",period,filterStatus?statuses[filterStatus]:t.all].join(" ");
+      const doc = await buildReport(rows, language, formatDate(today, language, true), undefined, {customerNumber,signature,period:reportScope});
       doc.save(`Ahmet-Tepe-${language === "de" ? "Bewerbungsnachweis" : "Basvuru-Raporu"}-${today}.pdf`);
     } catch {
       setPdfError(language === "de" ? "PDF konnte nicht erstellt werden. Bitte erneut versuchen." : "PDF oluşturulamadı. Lütfen tekrar deneyin.");
@@ -288,6 +297,8 @@ export function Dashboard({ applications: allApplications, tasks, today }: Dashb
             <p role="status">{invalidRange?(language==="de"?"Datumsbereich ungültig.":"Tarih aralığı geçersiz."):`${filtered.length} / ${applications.length}`} · {language==="de"?"Liste und PDF verwenden dieselben Filter. Undatierte Einträge werden bei Datumsfiltern ausgeschlossen.":"Liste ve PDF aynı filtreleri kullanır. Tarih filtresinde tarihsiz kayıtlar dışarıda kalır."}</p>
             <details><summary>{language==="de"?"Papierkorb":"Çöp kutusu"} ({trash.length})</summary>{trash.map(item=><div className="trash-row" key={item.id}><span>{item.company} — {item.role}</span><form action={async data=>{await restoreApplication(data);router.refresh();}}><input type="hidden" name="id" value={item.id}/><button type="submit">{language==="de"?"Wiederherstellen":"Geri yükle"}</button></form></div>)}{!trash.length&&<p>{language==="de"?"Papierkorb ist leer.":"Çöp kutusu boş."}</p>}</details>
           </section>
+          <section className="career-tools"><details><summary>{language==="de"?"Jobcenter-Berichtsprofil":"Jobcenter rapor profili"}</summary><p>{language==="de"?"Nur für diesen PDF-Download. Kundennummer wird weder gespeichert noch an den Server gesendet. Zeitraum und Status entsprechen den Filtern oben.":"Yalnızca bu PDF çıktısı için. Müşteri numarası kaydedilmez ve sunucuya gönderilmez. Dönem ve durum yukarıdaki filtrelerden alınır."}</p><label>{language==="de"?"Kundennummer (optional)":"Müşteri numarası (isteğe bağlı)"}<input maxLength={40} autoComplete="off" value={customerNumber} onChange={e=>setCustomerNumber(e.target.value)}/></label><label className="confirm-check"><input type="checkbox" checked={signature} onChange={e=>setSignature(e.target.checked)}/>{language==="de"?"Unterschriftsfeld im PDF":"PDF'ye imza alanı ekle"}</label></details></section>
+          <CareerTools key={language} applications={allApplications.map(a=>applications.find(item=>item.id===a.id)||a)} career={career} language={language} today={today}/>
           <div className="file-layout">
             <section className="file-list" id="basvurular" aria-label={language === "de" ? "Bewerbungsverfolgung" : "Başvuru takibi"}>
               <div className="list-intro"><div><p className="eyebrow"><span className="eyebrow-line" /> {t.records}</p><h2>{t.applications}</h2></div><span className="list-note">{t.clickToOpen}</span></div>

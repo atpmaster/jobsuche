@@ -3,6 +3,7 @@
 import { env } from "cloudflare:workers";
 import { revalidatePath } from "next/cache";
 import { isDuplicate } from "./record-utils";
+import { getCareerData } from "./career-actions";
 
 type Application = {
   deletedAt: string | null;
@@ -126,7 +127,8 @@ async function prepareDb() {
     },
   ];
 
-  for (const seed of seeds) {
+  const existingCount = await db.prepare("SELECT COUNT(*) AS count FROM applications").first<{count:number}>();
+  for (const seed of existingCount?.count ? [] : seeds) {
     await db.prepare(`INSERT INTO applications (company, role, track, location, score, status, applied_on, source, url, notes, next_action, next_action_date, feedback, contact_name, contact_email)
       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       WHERE NOT EXISTS (SELECT 1 FROM applications WHERE company = ? AND role = ?)`)
@@ -175,6 +177,7 @@ async function prepareDb() {
 
 export async function getDashboardData() {
   const db = await prepareDb();
+  const career = await getCareerData();
   const [apps, tasks, updates, steps] = await Promise.all([
     db.prepare(`SELECT id, deleted_at AS deletedAt, company, role, track, location, score, status, deadline, url, notes, source, applied_on AS appliedOn, contact_name AS contactName, contact_email AS contactEmail, contact_phone AS contactPhone, last_contact_on AS lastContactOn, next_action AS nextAction, next_action_date AS nextActionDate, feedback
       FROM applications ORDER BY CASE status WHEN 'interview' THEN 1 WHEN 'offer' THEN 2 WHEN 'preparing' THEN 3 WHEN 'applied' THEN 4 WHEN 'saved' THEN 5 ELSE 6 END, COALESCE(next_action_date, deadline, applied_on, created_at) ASC`).all<Application>(),
@@ -184,6 +187,7 @@ export async function getDashboardData() {
   ]);
 
   return {
+    career,
     applications: apps.results.map((application) => ({
       ...application,
       updates: updates.results.filter((item) => item.applicationId === application.id),

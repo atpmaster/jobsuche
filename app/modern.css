@@ -35,3 +35,21 @@
 }
 @media screen {.date-editor{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:16px;border:1px solid #cad5e2;border-radius:10px;margin:16px 0}.date-editor label{display:flex;gap:10px;align-items:center}.date-editor input,.date-editor button{min-height:44px;border:1px solid #b8c9dd;border-radius:8px;padding:10px;font:inherit}.date-editor small{flex:1 1 220px;line-height:1.5}.date-editor button{background:#edf4ff;color:#163d73;cursor:pointer}}
 @media screen {.language-switcher button {display:inline-flex;align-items:center;gap:7px;min-height:44px;padding:9px 11px!important;white-space:nowrap}.language-switcher img{display:block;box-shadow:0 0 0 1px #00000018;flex-shrink:0}.header-actions{flex-wrap:wrap}}
+@media screen {
+ .career-tools {margin:18px 0;display:grid;gap:12px;font-size:14px;line-height:1.6}
+ .career-tools>details {background:#fff;border:1px solid #dce4ee;border-radius:12px;padding:16px 20px}
+ .career-tools summary {font-weight:600;cursor:pointer;min-height:30px}
+ .career-tools details[open]>summary {margin-bottom:16px}
+ .career-tools fieldset {border:0;padding:0;margin:0;min-width:0}
+ .career-tools label {display:flex;flex-direction:column;gap:6px;margin:10px 0}
+ .career-tools input,.career-tools select,.career-tools textarea {box-sizing:border-box;min-width:0;max-width:100%;width:100%;border:1px solid #cad5e2;border-radius:8px;padding:10px;font:inherit;background:#fff;color:#172b43}
+ .career-tools button,.career-tools .draft-editor a {display:inline-block;min-height:42px;border:1px solid #b8c9dd;border-radius:8px;padding:9px 14px;background:#edf4ff;color:#163d73;font:inherit;cursor:pointer;margin:5px 8px 5px 0}
+ .career-form-grid,.career-stats {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+ .career-stats {grid-template-columns:repeat(3,minmax(0,1fr));margin:20px 0}
+ .career-stats span {display:flex;flex-direction:column;background:#f3f7fc;border-radius:10px;padding:16px}
+ .career-stats b {font-size:26px}
+ .career-tools table {width:100%;border-collapse:collapse;text-align:left}.career-tools td,.career-tools th {padding:10px;border-bottom:1px solid #dce4ee}
+ .career-tools .confirm-check {flex-direction:row;align-items:center}.career-tools input[type=checkbox] {width:20px;height:20px;flex-shrink:0}
+ .career-tools article {overflow-wrap:anywhere}.interview-card {padding:16px;border:1px solid #dce4ee;border-radius:10px;margin:14px 0}
+ @media(max-width:650px){.career-form-grid {grid-template-columns:1fr}.career-stats {grid-template-columns:1fr}.career-tools>details {padding:14px}.career-tools select {width:100%}}
+}
