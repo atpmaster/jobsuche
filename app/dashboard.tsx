@@ -88,6 +88,19 @@ function localizedCategory(value: string, language: Language) {
   return { Takip: "Nachfassen", Başvuru: "Bewerbung", Almanca: "Deutsch", Kariyer: "Karriere" }[value] ?? value;
 }
 
+function localizedSource(value: string | null | undefined, language: Language) {
+  if (!value) return value;
+  const translations: Record<string, Record<Language, string>> = {
+    "Arbeitsagentur / myschoolcare": { tr: "İş Ajansı / myschoolcare", de: "Arbeitsagentur / myschoolcare" },
+    "Landkreis Gifhorn / Bewerbermanagement": { tr: "Gifhorn ilçesi / başvuru yönetimi", de: "Landkreis Gifhorn / Bewerbermanagement" },
+    "Paritätischer Niedersachsen / E-Mail": { tr: "Paritätischer Niedersachsen / E-posta", de: "Paritätischer Niedersachsen / E-Mail" },
+    "E-Mail": { tr: "E-posta", de: "E-Mail" },
+    "Bewerbermanagement": { tr: "Başvuru yönetimi", de: "Bewerbermanagement" },
+    "Karriereportal": { tr: "Kariyer portalı", de: "Karriereportal" },
+  };
+  return translations[value]?.[language] ?? value;
+}
+
 function localizedContent(value: string | null | undefined, language: Language) {
   if (!value) return value;
   const statusTitle = value.match(/^Durum: (saved|preparing|applied|interview|offer|rejected|withdrawn)$/);
@@ -170,7 +183,12 @@ export function Dashboard({ applications: allApplications, tasks, today, career 
   const applications = allApplications.filter(item => !item.deletedAt).map(item => {
     const sources=allApplications.filter(a=>career.merges.some(m=>m.sourceId===a.id&&m.targetId===item.id));
     const dates=[item,...sources].map(a=>a.appliedOn).filter((d):d is string=>!!d).sort();
-    return {...item,appliedOn:dates[0]||null,updates:[...item.updates,...sources.flatMap(a=>a.updates)].sort((a,b)=>b.happenedOn.localeCompare(a.happenedOn)),steps:[...item.steps,...sources.flatMap(a=>a.steps)].filter((step,index,all)=>all.findIndex(s=>s.label===step.label)===index).map(step=>({...step,done:Math.max(...[...item.steps,...sources.flatMap(a=>a.steps)].filter(s=>s.label===step.label).map(s=>s.done))}))};
+    return {...item,source: localizedSource(item.source, language),appliedOn:dates[0]||null,updates:[...item.updates,...sources.flatMap(a=>a.updates)].sort((a,b)=>b.happenedOn.localeCompare(a.happenedOn)),steps:[...item.steps,...sources.flatMap(a=>a.steps)].filter((step,index,all)=>all.findIndex(s=>s.label===step.label)===index).map(step=>({...step,done:Math.max(...[...item.steps,...sources.flatMap(a=>a.steps)].filter(s=>s.label===step.label).map(s=>s.done))}))};
+  }).sort((a, b) => {
+    if (!a.appliedOn && !b.appliedOn) return 0;
+    if (!a.appliedOn) return 1;
+    if (!b.appliedOn) return -1;
+    return b.appliedOn.localeCompare(a.appliedOn);
   });
   const trash = allApplications.filter(item => item.deletedAt && !career.merges.some(m=>m.sourceId===item.id));
   const [customerNumber,setCustomerNumber]=useState("");
@@ -227,10 +245,15 @@ export function Dashboard({ applications: allApplications, tasks, today, career 
     try {
       const { buildReport } = await import("./report");
       if (invalidRange || !filtered.length) throw new Error("EMPTY_REPORT");
-      const rows = [...filtered].sort((a, b) => (a.appliedOn || "9999").localeCompare(b.appliedOn || "9999")).map(item => ({
+      const rows = [...filtered].sort((a, b) => {
+        if (!a.appliedOn && !b.appliedOn) return 0;
+        if (!a.appliedOn) return 1;
+        if (!b.appliedOn) return -1;
+        return b.appliedOn.localeCompare(a.appliedOn);
+      }).map(item => ({
         company: item.company, role: item.role, location: item.location || "",
         date: item.appliedOn ? new Intl.DateTimeFormat(locale).format(new Date(`${item.appliedOn}T12:00:00`)) : t.noDate,
-        source: item.source || t.noSource, status: statuses[item.status] || item.status,
+        source: localizedSource(item.source, language) || t.noSource, status: statuses[item.status] || item.status,
         next: [item.nextActionDate ? new Intl.DateTimeFormat(locale).format(new Date(`${item.nextActionDate}T12:00:00`)) : "", localizedContent(item.nextAction, language) || t.noNextAction].filter(Boolean).join("\n"),
       }));
       const period=[dateFrom||"…",dateTo||"…"].join(" – ");
