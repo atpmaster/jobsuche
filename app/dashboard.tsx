@@ -180,6 +180,7 @@ function followUpKey(application: Application) {
 }
 
 export function Dashboard({ applications: allApplications, tasks, today, career }: DashboardProps) {
+  const [language, setLanguage] = useState<Language>("tr");
   const applications = allApplications.filter(item => !item.deletedAt).map(item => {
     const sources=allApplications.filter(a=>career.merges.some(m=>m.sourceId===a.id&&m.targetId===item.id));
     const dates=[item,...sources].map(a=>a.appliedOn).filter((d):d is string=>!!d).sort();
@@ -201,7 +202,6 @@ export function Dashboard({ applications: allApplications, tasks, today, career 
   const [dateTo, setDateTo] = useState("");
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [language, setLanguage] = useState<Language>("tr");
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfError, setPdfError] = useState("");
   const { dismissed, dismiss, dismissAll, restoreAll } = useDismissedFollowUps();
