@@ -180,7 +180,7 @@ export async function getDashboardData() {
   const career = await getCareerData();
   const [apps, tasks, updates, steps] = await Promise.all([
     db.prepare(`SELECT id, deleted_at AS deletedAt, company, role, track, location, score, status, deadline, url, notes, source, applied_on AS appliedOn, contact_name AS contactName, contact_email AS contactEmail, contact_phone AS contactPhone, last_contact_on AS lastContactOn, next_action AS nextAction, next_action_date AS nextActionDate, feedback
-      FROM applications ORDER BY CASE status WHEN 'interview' THEN 1 WHEN 'offer' THEN 2 WHEN 'preparing' THEN 3 WHEN 'applied' THEN 4 WHEN 'saved' THEN 5 ELSE 6 END, COALESCE(next_action_date, deadline, applied_on, created_at) ASC`).all<Application>(),
+      FROM applications ORDER BY COALESCE(applied_on, created_at) DESC, id DESC`).all<Application>(),
     db.prepare("SELECT id, title, category, estimate, done FROM tasks ORDER BY done ASC, sort_order ASC, id ASC LIMIT 8").all<Task>(),
     db.prepare("SELECT id, application_id AS applicationId, update_type AS updateType, title, body, happened_on AS happenedOn FROM application_updates ORDER BY happened_on DESC, id DESC").all<{ id: number; applicationId: number; updateType: string; title: string; body: string | null; happenedOn: string }>(),
     db.prepare("SELECT id, application_id AS applicationId, label, done, sort_order AS sortOrder FROM application_steps ORDER BY application_id, sort_order, id").all<{ id: number; applicationId: number; label: string; done: number; sortOrder: number }>(),
