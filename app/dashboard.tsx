@@ -8,8 +8,8 @@ import { useRouter } from "next/navigation";
 import { isDuplicate, normalize } from "./record-utils";
 import { restoreApplication } from "./actions";
 import { LiveRefresh } from "./live-refresh";
+import { localizedContent, localizedSource, statusLabels, type Language } from "./localization";
 
-type Language = "tr" | "de";
 type Step = { id: number; label: string; done: number };
 type Update = { id: number; updateType: string; title: string; body: string | null; happenedOn: string };
 export type Application = {
@@ -31,10 +31,6 @@ const copy = {
   }
 } as const;
 
-const statusLabels: Record<Language, Record<string, string>> = {
-  tr: { new: "Yeni başvuru", listed: "Listeye eklendi", sent: "Gönderildi", waiting: "Cevap bekleniyor", received: "Cevap geldi", withdrawn: "Kayıt dışı", saved: "Yeni başvuru", preparing: "Listeye eklendi", applied: "Cevap bekleniyor", interview: "Cevap geldi", offer: "Cevap geldi", rejected: "Cevap geldi" },
-  de: { new: "Neue Bewerbung", listed: "Zur Liste hinzugefügt", sent: "Gesendet", waiting: "Rückmeldung ausstehend", received: "Rückmeldung erhalten", withdrawn: "Kein Bewerbungsvorgang", saved: "Neue Bewerbung", preparing: "Zur Liste hinzugefügt", applied: "Rückmeldung ausstehend", interview: "Rückmeldung erhalten", offer: "Rückmeldung erhalten", rejected: "Rückmeldung erhalten" },
-};
 const statusOrder = ["new", "listed", "sent", "waiting", "received"];
 const trackLabels: Record<Language, Record<string, string>> = { tr: { teaching: "Eğitim", cyber: "Siber güvenlik", other: "Alternatif" }, de: { teaching: "Bildung", cyber: "Cybersecurity", other: "Sonstige" } };
 const updateTypeOptions: Record<Language, Array<{ value: string; label: string }>> = { tr: [{ value: "Not", label: "Not" }, { value: "E-posta", label: "E-posta" }, { value: "Telefon", label: "Telefon" }, { value: "Mülakat", label: "Mülakat" }, { value: "Durum", label: "Durum" }], de: [{ value: "Notiz", label: "Notiz" }, { value: "E-Mail", label: "E-Mail" }, { value: "Telefon", label: "Telefon" }, { value: "Vorstellungsgespräch", label: "Vorstellungsgespräch" }, { value: "Status", label: "Status" }] };
@@ -86,51 +82,6 @@ function localizedTask(value: string, language: Language) {
 function localizedCategory(value: string, language: Language) {
   if (language === "tr") return value;
   return { Takip: "Nachfassen", Başvuru: "Bewerbung", Almanca: "Deutsch", Kariyer: "Karriere" }[value] ?? value;
-}
-
-function localizedSource(value: string | null | undefined, language: Language) {
-  if (!value) return value;
-  const translations: Record<string, Record<Language, string>> = {
-    "Arbeitsagentur / myschoolcare": { tr: "İş Ajansı / myschoolcare", de: "Arbeitsagentur / myschoolcare" },
-    "Landkreis Gifhorn / Bewerbermanagement": { tr: "Gifhorn ilçesi / başvuru yönetimi", de: "Landkreis Gifhorn / Bewerbermanagement" },
-    "Paritätischer Niedersachsen / E-Mail": { tr: "Paritätischer Niedersachsen / E-posta", de: "Paritätischer Niedersachsen / E-Mail" },
-    "E-Mail": { tr: "E-posta", de: "E-Mail" },
-    "Bewerbermanagement": { tr: "Başvuru yönetimi", de: "Bewerbermanagement" },
-    "Karriereportal": { tr: "Kariyer portalı", de: "Karriereportal" },
-  };
-  return translations[value]?.[language] ?? value;
-}
-
-function localizedContent(value: string | null | undefined, language: Language) {
-  if (!value) return value;
-  const statusTitle = value.match(/^Durum: (new|listed|sent|waiting|received|saved|preparing|applied|interview|offer|rejected|withdrawn)$/);
-  if (statusTitle) return `${language === "de" ? "Status" : "Durum"}: ${statusLabels[language][statusTitle[1]]}`;
-  const statusBody = value.match(/^Başvuru durumu (new|listed|sent|waiting|received|saved|preparing|applied|interview|offer|rejected|withdrawn) olarak güncellendi\.$/);
-  if (statusBody) return language === "de" ? `Bewerbungsstatus auf ${statusLabels.de[statusBody[1]]} aktualisiert.` : `Başvuru durumu ${statusLabels.tr[statusBody[1]].toLowerCase()} olarak güncellendi.`;
-  const translations: Record<string, Record<Language, string>> = {
-    "20–40 saat; başvuru portalında tamamlandı.": { tr: "20–40 saat; başvuru portalında tamamlandı.", de: "20–40 Stunden; im Bewerbungsportal abgeschlossen." },
-    "Vollzeit, ab sofort; portalda başarıyla gönderildi.": { tr: "Tam zamanlı, hemen başlayabilecek; portal üzerinden başarıyla gönderildi.", de: "Vollzeit, ab sofort; erfolgreich über das Portal gesendet." },
-    "Başvuru alındı teyidi geldi; Personalteam incelemesinden sonra dönüş yapılacak.": { tr: "Başvuru alındı teyidi geldi; Personel ekibinin incelemesinden sonra dönüş yapılacak.", de: "Eingangsbestätigung erhalten; Rückmeldung nach Prüfung durch das Personalteam." },
-    "Stellennummer 18049-26 · unterschriebener Bewerbungsbogen und aktualisierte Unterlagen nachgereicht.": { tr: "İlan numarası 18049-26 · imzalı başvuru formu ve güncellenmiş belgeler sonradan gönderildi.", de: "Stellennummer 18049-26 · unterschriebener Bewerbungsbogen und aktualisierte Unterlagen nachgereicht." },
-    "Otomatik alındı teyidi: belgeler dikkatle inceleniyor.": { tr: "Otomatik alındı teyidi: belgeler dikkatle inceleniyor.", de: "Automatische Eingangsbestätigung: Die Unterlagen werden sorgfältig geprüft." },
-    "Bewerbung und 18-seitige Unterlagen per E-Mail versendet; Rückmeldung ausstehend.": { tr: "Başvuru ve 18 sayfalık belgeler e-posta ile gönderildi; geri dönüş bekleniyor.", de: "Bewerbung und 18-seitige Unterlagen per E-Mail versendet; Rückmeldung ausstehend." },
-    "04.09.2026: Schule informiert, dass es sich um eine Förderschule handelt": { tr: "04.09.2026: Okul, buranın bir destek okulu olduğunu bildirdi.", de: "04.09.2026: Schule informiert, dass es sich um eine Förderschule handelt" },
-    "Geri dönüşü kontrol et": { tr: "Geri dönüşü kontrol et", de: "Rückmeldung prüfen" },
-    "Başvuru teyidini ve açık pozisyonları izle": { tr: "Başvuru teyidini ve açık pozisyonları izle", de: "Eingangsbestätigung und offene Stellen beobachten" },
-    "Yanıt için takip tarihi geldiğinde kontrol et": { tr: "Yanıt için takip tarihi geldiğinde kontrol et", de: "Zum Nachfassdatum auf Rückmeldung prüfen" },
-    "Eingangsbestätigung prüfen": { tr: "Başvuru alındı teyidini kontrol et", de: "Eingangsbestätigung prüfen" },
-    "Antwort prüfen und Eignung für Förderschule klären": { tr: "Yanıtı kontrol et ve destek okuluna uygunluğu değerlendir", de: "Antwort prüfen und Eignung für Förderschule klären" },
-    "Rückmeldung kontrollieren": { tr: "Geri dönüşü kontrol et", de: "Rückmeldung kontrollieren" },
-    "Rückmeldung anfordern": { tr: "Geri dönüş iste", de: "Rückmeldung anfordern" },
-    "Rückmeldung bei Sylvia Hauk anfordern": { tr: "Sylvia Hauk'tan geri dönüş iste", de: "Rückmeldung bei Sylvia Hauk anfordern" },
-    "Überfällige Rückmeldung nachfassen": { tr: "Geciken geri dönüşü takip et", de: "Überfällige Rückmeldung nachfassen" },
-    "Letzten Status im Portal prüfen": { tr: "Portaldaki son durumu kontrol et", de: "Letzten Status im Portal prüfen" },
-    "Eingangsbestätigung kontrollieren": { tr: "Başvuru alındı teyidini kontrol et", de: "Eingangsbestätigung kontrollieren" },
-    "Eingangsbestätigung und Rückmeldung kontrollieren": { tr: "Başvuru alındı teyidini ve geri dönüşü kontrol et", de: "Eingangsbestätigung und Rückmeldung kontrollieren" },
-    "Bewerbungsbogen und Unterlagen versendet": { tr: "Başvuru formu ve belgeler gönderildi", de: "Bewerbungsbogen und Unterlagen versendet" },
-    "Unterschriebener EIS-Bewerbungsbogen und aktualisierte 18-seitige PDF-Unterlagen an die BBS I Gifhorn gesendet.": { tr: "İmzalı EIS başvuru formu ve güncellenmiş 18 sayfalık PDF belgeleri BBS I Gifhorn'a gönderildi.", de: "Unterschriebener EIS-Bewerbungsbogen und aktualisierte 18-seitige PDF-Unterlagen an die BBS I Gifhorn gesendet." },
-  };
-  return translations[value]?.[language] ?? value;
 }
 
 function isReportNoise(application: Application) {
@@ -192,10 +143,10 @@ function ApplicationAuditEditor({ item, language }: { item: Application; languag
     <div className="form-row"><label>{de ? "Bereich" : "Alan"}<select name="track" defaultValue={item.track}><option value="teaching">{de ? "Bildung" : "Eğitim"}</option><option value="cyber">{de ? "Cybersecurity" : "Siber güvenlik"}</option><option value="other">{de ? "Sonstige" : "Alternatif"}</option></select></label><label>{de ? "Status" : "Durum"}<select name="status" defaultValue={item.status}>{statusOrder.map(status => <option key={status} value={status}>{statusLabels[language][status]}</option>)}</select></label></div>
     <div className="form-row"><label>{de ? "Ort" : "Konum"}<input name="location" defaultValue={item.location || ""} /></label><label>{de ? "Passung" : "Uyum"}<input name="score" type="number" min="0" max="100" defaultValue={item.score} /></label></div>
     <div className="form-row"><label>{de ? "Bewerbung am" : "Başvuru tarihi"}<input name="appliedOn" type="date" defaultValue={item.appliedOn || ""} /></label><label>{de ? "Nachfassen am" : "Takip tarihi"}<input name="nextActionDate" type="date" defaultValue={item.nextActionDate || ""} /></label></div>
-    <div className="form-row"><label>{de ? "Quelle" : "Kaynak"}<input name="source" defaultValue={item.source || ""} /></label><label>{de ? "Kontaktname" : "Muhatap"}<input name="contactName" defaultValue={item.contactName || ""} /></label></div>
-    <div className="form-row"><label>{de ? "Kontakt-E-Mail" : "Muhatap e-postası"}<input name="contactEmail" type="email" defaultValue={item.contactEmail || ""} /></label><label>{de ? "Nächster Schritt" : "Sonraki adım"}<input name="nextAction" defaultValue={item.nextAction || ""} /></label></div>
-    <label>{de ? "Interne Notiz" : "İç not"}<textarea name="notes" defaultValue={item.notes || ""} /></label>
-    <label>{de ? "Kurze Rückmeldung für den Bericht" : "Rapor için kısa geri dönüş"}<textarea name="feedback" defaultValue={item.feedback || ""} /></label>
+    <div className="form-row"><label>{de ? "Quelle" : "Kaynak"}<input name="source" defaultValue={localizedSource(item.source, language) || ""} /></label><label>{de ? "Kontaktname" : "Muhatap"}<input name="contactName" defaultValue={item.contactName || ""} /></label></div>
+    <div className="form-row"><label>{de ? "Kontakt-E-Mail" : "Muhatap e-postası"}<input name="contactEmail" type="email" defaultValue={item.contactEmail || ""} /></label><label>{de ? "Nächster Schritt" : "Sonraki adım"}<input name="nextAction" defaultValue={localizedContent(item.nextAction, language) || ""} /></label></div>
+    <label>{de ? "Interne Notiz" : "İç not"}<textarea name="notes" defaultValue={localizedContent(item.notes, language) || ""} /></label>
+    <label>{de ? "Kurze Rückmeldung für den Bericht" : "Rapor için kısa geri dönüş"}<textarea name="feedback" defaultValue={localizedContent(item.feedback, language) || ""} /></label>
     <button type="submit">{de ? "Berichtsdaten speichern" : "Rapor bilgilerini kaydet"}</button>
   </form></details>;
 }
@@ -205,7 +156,7 @@ export function Dashboard({ applications: allApplications, tasks, today, career 
   const applications = allApplications.filter(item => !item.deletedAt && !isReportNoise(item)).map(item => {
     const sources=allApplications.filter(a=>career.merges.some(m=>m.sourceId===a.id&&m.targetId===item.id));
     const dates=[item,...sources].map(a=>a.appliedOn).filter((d):d is string=>!!d).sort();
-    return {...item,source: localizedSource(item.source, language),appliedOn:dates[0]||null,updates:[...item.updates,...sources.flatMap(a=>a.updates)].sort((a,b)=>b.happenedOn.localeCompare(a.happenedOn)),steps:[...item.steps,...sources.flatMap(a=>a.steps)].filter((step,index,all)=>all.findIndex(s=>s.label===step.label)===index).map(step=>({...step,done:Math.max(...[...item.steps,...sources.flatMap(a=>a.steps)].filter(s=>s.label===step.label).map(s=>s.done))}))};
+  return {...item,source: localizedSource(item.source, language),appliedOn:dates[0]||null,updates:[...item.updates,...sources.flatMap(a=>a.updates)].sort((a,b)=>b.happenedOn.localeCompare(a.happenedOn)),steps:[...item.steps,...sources.flatMap(a=>a.steps)].filter((step,index,all)=>all.findIndex(s=>s.label===step.label)===index).map(step=>({...step,done:Math.max(...[...item.steps,...sources.flatMap(a=>a.steps)].filter(s=>s.label===step.label).map(s=>s.done))}))};
   }).sort((a, b) => {
     if (!a.appliedOn && !b.appliedOn) return 0;
     if (!a.appliedOn) return 1;
@@ -282,16 +233,27 @@ export function Dashboard({ applications: allApplications, tasks, today, career 
       const period=[dateFrom||"…",dateTo||"…"].join(" – ");
       const reportScope=[language==="de"?"Zeitraum: ":"Dönem: ",period,filterStatus?statuses[filterStatus]:t.all].join(" ");
       const doc = await buildReport(rows, language, formatDate(today, language, true), undefined, {customerNumber,signature,period:reportScope});
+      const fileName = language === "de" ? `Ahmet-Tepe-Bewerbungsnachweis-${today}.pdf` : `Ahmet-Tepe-Basvuru-Takip-${today}.pdf`;
       // Chrome on some Windows installations can fail its post-download virus scan
       // Chrome on some Windows installations can fail its post-download virus scan
       // for client-generated Blob downloads. Open the valid PDF in a tab that was
       // created directly by the user's click, so no forced download is performed.
-      const pdfUrl = doc.output("bloburl");
+      const pdfBlob = doc.output("blob") as Blob;
+      const pdfUrl = URL.createObjectURL(pdfBlob);
       if (viewer) {
-        viewer.location.href = pdfUrl;
+        // Keep the reliable PDF preview, but also provide a correctly named
+        // download link on the preview page. Chrome otherwise names blob PDFs
+        // with an opaque UUID.
+        viewer.document.open();
+        viewer.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${fileName}</title><style>html,body{margin:0;height:100%;font-family:Arial,sans-serif;background:#f2f4f7}header{height:52px;display:flex;align-items:center;gap:14px;padding:0 18px;background:#172b43;color:#fff;box-sizing:border-box}header strong{font-size:14px}header a{margin-left:auto;color:#fff;background:#1b5db9;border-radius:5px;padding:9px 13px;text-decoration:none;font-size:13px;font-weight:700}iframe{display:block;width:100%;height:calc(100% - 52px);border:0;background:#fff}</style></head><body><header><strong>${language === "de" ? "PDF-Vorschau" : "PDF önizleme"}</strong><span>${fileName}</span><a href="${pdfUrl}" download="${fileName}">${language === "de" ? "PDF herunterladen" : "PDF'yi indir"}</a></header><iframe title="${fileName}" src="${pdfUrl}"></iframe></body></html>`);
+        viewer.document.close();
         window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 10 * 60 * 1000);
       } else {
-        window.location.href = pdfUrl;
+        const link = document.createElement("a");
+        link.href = pdfUrl;
+        link.download = fileName;
+        link.click();
+        window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60 * 1000);
       }
     } catch {
       if (viewer && !viewer.closed) viewer.close();
