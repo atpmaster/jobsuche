@@ -85,6 +85,7 @@ async function prepareDb() {
     db.prepare("UPDATE applications SET status = 'listed' WHERE status = 'preparing'"),
     db.prepare("UPDATE applications SET status = 'waiting' WHERE status = 'applied'"),
     db.prepare("UPDATE applications SET status = 'received' WHERE status IN ('interview', 'offer', 'rejected')"),
+    db.prepare("UPDATE applications SET status = 'received' WHERE status IN ('new', 'listed', 'sent', 'waiting') AND id IN (SELECT application_id FROM application_updates WHERE title LIKE 'Gmail yanıtı:%')"),
   ]);
 
   const seeds = [

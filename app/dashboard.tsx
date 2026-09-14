@@ -202,7 +202,7 @@ function ApplicationAuditEditor({ item, language }: { item: Application; languag
 
 export function Dashboard({ applications: allApplications, tasks, today, career }: DashboardProps) {
   const [language, setLanguage] = useState<Language>("tr");
-  const applications = allApplications.filter(item => !item.deletedAt).map(item => {
+  const applications = allApplications.filter(item => !item.deletedAt && !isReportNoise(item)).map(item => {
     const sources=allApplications.filter(a=>career.merges.some(m=>m.sourceId===a.id&&m.targetId===item.id));
     const dates=[item,...sources].map(a=>a.appliedOn).filter((d):d is string=>!!d).sort();
     return {...item,source: localizedSource(item.source, language),appliedOn:dates[0]||null,updates:[...item.updates,...sources.flatMap(a=>a.updates)].sort((a,b)=>b.happenedOn.localeCompare(a.happenedOn)),steps:[...item.steps,...sources.flatMap(a=>a.steps)].filter((step,index,all)=>all.findIndex(s=>s.label===step.label)===index).map(step=>({...step,done:Math.max(...[...item.steps,...sources.flatMap(a=>a.steps)].filter(s=>s.label===step.label).map(s=>s.done))}))};
@@ -247,7 +247,7 @@ export function Dashboard({ applications: allApplications, tasks, today, career 
 
   const changeLanguage = (next: Language) => setLanguage(next);
   const filtered = applications.filter(item => (!query || normalize([item.company,item.role,item.location].join(" ")).includes(normalize(query))) && (!filterStatus || item.status === filterStatus) && (!filterTrack || item.track === filterTrack) && (!dateFrom || !!item.appliedOn && item.appliedOn >= dateFrom) && (!dateTo || !!item.appliedOn && item.appliedOn <= dateTo));
-  const reportApplications = filtered.filter(item => !isReportNoise(item));
+  const reportApplications = filtered;
   const invalidRange = !!dateFrom && !!dateTo && dateFrom > dateTo;
   const exportBackup = () => {
     const url = URL.createObjectURL(new Blob([JSON.stringify({schemaVersion:1, exportedAt:new Date().toISOString(), applications:allApplications,tasks,career},null,2)],{type:"application/json"}));
@@ -351,11 +351,11 @@ export function Dashboard({ applications: allApplications, tasks, today, career 
             <label>{language==="de"?"Bewerbungsdatum ab":"Başvuru tarihi başlangıç"}<input type="date" value={dateFrom} max={dateTo||undefined} onChange={e=>setDateFrom(e.target.value)} /></label>
             <label>{language==="de"?"Bis":"Bitiş"}<input type="date" value={dateTo} min={dateFrom||undefined} onChange={e=>setDateTo(e.target.value)} /></label>
             <div className="control-actions"><button type="button" onClick={()=>{setQuery("");setFilterStatus("");setFilterTrack("");setDateFrom("");setDateTo("");}}>{language==="de"?"Filter zurücksetzen":"Filtreleri temizle"}</button><button type="button" onClick={exportBackup}>{language==="de"?"Datensicherung (JSON)":"Verileri yedekle (JSON)"}</button></div>
-      <p role="status">{invalidRange?(language==="de"?"Datumsbereich ungültig.":"Tarih aralığı geçersiz."):`${filtered.length} / ${applications.length} · ${reportApplications.length} ${language==="de"?"echte Bewerbungen im PDF":"gerçek başvuru PDF’de"}`} · {language==="de"?"Die Liste zeigt alle importierten Einträge; doppelte oder nicht bewerbungsbezogene Gmail-Einträge werden im PDF nicht aufgeführt. Undatierte Einträge werden bei Datumsfiltern ausgeschlossen.":"Liste tüm aktarılan kayıtları gösterir; mükerrer veya başvuru olmayan Gmail kayıtları PDF’ye alınmaz. Tarih filtresinde tarihsiz kayıtlar dışarıda kalır."}</p>
+      <p role="status">{invalidRange?(language==="de"?"Datumsbereich ungültig.":"Tarih aralığı geçersiz."):`${filtered.length} / ${applications.length}`}</p>
             <details><summary>{language==="de"?"Papierkorb":"Çöp kutusu"} ({trash.length})</summary>{trash.map(item=><div className="trash-row" key={item.id}><span>{item.company} — {item.role}</span><form action={async data=>{await restoreApplication(data);router.refresh();}}><input type="hidden" name="id" value={item.id}/><button type="submit">{language==="de"?"Wiederherstellen":"Geri yükle"}</button></form></div>)}{!trash.length&&<p>{language==="de"?"Papierkorb ist leer.":"Çöp kutusu boş."}</p>}</details>
           </section>
           <section className="career-tools"><details><summary>{language==="de"?"Jobcenter-Berichtsprofil":"Jobcenter rapor profili"}</summary><p>{language==="de"?"Nur für diesen PDF-Download. Kundennummer wird weder gespeichert noch an den Server gesendet. Zeitraum und Status entsprechen den Filtern oben.":"Yalnızca bu PDF çıktısı için. Müşteri numarası kaydedilmez ve sunucuya gönderilmez. Dönem ve durum yukarıdaki filtrelerden alınır."}</p><label>{language==="de"?"Kundennummer (optional)":"Müşteri numarası (isteğe bağlı)"}<input maxLength={40} autoComplete="off" value={customerNumber} onChange={e=>setCustomerNumber(e.target.value)}/></label><label className="confirm-check"><input type="checkbox" checked={signature} onChange={e=>setSignature(e.target.checked)}/>{language==="de"?"Unterschriftsfeld im PDF":"PDF'ye imza alanı ekle"}</label></details></section>
-          <CareerTools key={language} applications={allApplications.map(a=>applications.find(item=>item.id===a.id)||a)} career={career} language={language} today={today}/>
+          <CareerTools key={language} applications={applications} career={career} language={language} today={today}/>
           <details className="audit-tools"><summary>{language === "de" ? "Berichtsdaten prüfen" : "Rapor verilerini kontrol et"}</summary><p>{language === "de" ? "Hier können die Angaben der einzelnen Bewerbungen für einen klaren Jobcenter-Bericht korrigiert werden." : "Buradan her başvurunun Jobcenter raporu için kurum, durum, tarih, takip ve geri dönüş bilgilerini düzeltebilirsin."}</p><div className="audit-editor-list">{applications.map(item => <ApplicationAuditEditor key={item.id} item={item} language={language} />)}</div></details>
           <div className="file-layout">
             <section className="file-list" id="basvurular" aria-label={language === "de" ? "Bewerbungsverfolgung" : "Başvuru takibi"}>
