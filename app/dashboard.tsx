@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { addApplication, addApplicationUpdate, addTask, deleteApplication, updateApplicationStatus, updateApplicationStep, updateTask } from "./actions";
+import { addApplication, addApplicationUpdate, addTask, deleteApplication, updateApplicationRecord, updateApplicationStatus, updateApplicationStep, updateTask } from "./actions";
 import { CareerTools, type CareerData } from "./career-tools";
 import { DateEditor } from "./date-editor";
 import { useRouter } from "next/navigation";
@@ -179,6 +179,22 @@ function followUpKey(application: Application) {
   return `${application.id}:${application.nextActionDate ?? ""}`;
 }
 
+function ApplicationAuditEditor({ item, language }: { item: Application; language: Language }) {
+  const de = language === "de";
+  return <details className="audit-editor"><summary>{de ? "Berichtsfelder prüfen und korrigieren" : "Rapor alanlarını kontrol et ve düzelt"}: {item.company} — {item.role}</summary><form action={updateApplicationRecord} className="audit-form">
+    <input type="hidden" name="id" value={item.id} />
+    <div className="form-row"><label>{de ? "Arbeitgeber" : "Kurum"}<input name="company" required defaultValue={item.company} /></label><label>{de ? "Position" : "Pozisyon"}<input name="role" required defaultValue={item.role} /></label></div>
+    <div className="form-row"><label>{de ? "Bereich" : "Alan"}<select name="track" defaultValue={item.track}><option value="teaching">{de ? "Bildung" : "Eğitim"}</option><option value="cyber">{de ? "Cybersecurity" : "Siber güvenlik"}</option><option value="other">{de ? "Sonstige" : "Alternatif"}</option></select></label><label>{de ? "Status" : "Durum"}<select name="status" defaultValue={item.status}>{statusOrder.map(status => <option key={status} value={status}>{statusLabels[language][status]}</option>)}</select></label></div>
+    <div className="form-row"><label>{de ? "Ort" : "Konum"}<input name="location" defaultValue={item.location || ""} /></label><label>{de ? "Passung" : "Uyum"}<input name="score" type="number" min="0" max="100" defaultValue={item.score} /></label></div>
+    <div className="form-row"><label>{de ? "Bewerbung am" : "Başvuru tarihi"}<input name="appliedOn" type="date" defaultValue={item.appliedOn || ""} /></label><label>{de ? "Nachfassen am" : "Takip tarihi"}<input name="nextActionDate" type="date" defaultValue={item.nextActionDate || ""} /></label></div>
+    <div className="form-row"><label>{de ? "Quelle" : "Kaynak"}<input name="source" defaultValue={item.source || ""} /></label><label>{de ? "Kontaktname" : "Muhatap"}<input name="contactName" defaultValue={item.contactName || ""} /></label></div>
+    <div className="form-row"><label>{de ? "Kontakt-E-Mail" : "Muhatap e-postası"}<input name="contactEmail" type="email" defaultValue={item.contactEmail || ""} /></label><label>{de ? "Nächster Schritt" : "Sonraki adım"}<input name="nextAction" defaultValue={item.nextAction || ""} /></label></div>
+    <label>{de ? "Interne Notiz" : "İç not"}<textarea name="notes" defaultValue={item.notes || ""} /></label>
+    <label>{de ? "Kurze Rückmeldung für den Bericht" : "Rapor için kısa geri dönüş"}<textarea name="feedback" defaultValue={item.feedback || ""} /></label>
+    <button type="submit">{de ? "Berichtsdaten speichern" : "Rapor bilgilerini kaydet"}</button>
+  </form></details>;
+}
+
 export function Dashboard({ applications: allApplications, tasks, today, career }: DashboardProps) {
   const [language, setLanguage] = useState<Language>("tr");
   const applications = allApplications.filter(item => !item.deletedAt).map(item => {
@@ -334,6 +350,7 @@ export function Dashboard({ applications: allApplications, tasks, today, career 
           </section>
           <section className="career-tools"><details><summary>{language==="de"?"Jobcenter-Berichtsprofil":"Jobcenter rapor profili"}</summary><p>{language==="de"?"Nur für diesen PDF-Download. Kundennummer wird weder gespeichert noch an den Server gesendet. Zeitraum und Status entsprechen den Filtern oben.":"Yalnızca bu PDF çıktısı için. Müşteri numarası kaydedilmez ve sunucuya gönderilmez. Dönem ve durum yukarıdaki filtrelerden alınır."}</p><label>{language==="de"?"Kundennummer (optional)":"Müşteri numarası (isteğe bağlı)"}<input maxLength={40} autoComplete="off" value={customerNumber} onChange={e=>setCustomerNumber(e.target.value)}/></label><label className="confirm-check"><input type="checkbox" checked={signature} onChange={e=>setSignature(e.target.checked)}/>{language==="de"?"Unterschriftsfeld im PDF":"PDF'ye imza alanı ekle"}</label></details></section>
           <CareerTools key={language} applications={allApplications.map(a=>applications.find(item=>item.id===a.id)||a)} career={career} language={language} today={today}/>
+          <details className="audit-tools"><summary>{language === "de" ? "Berichtsdaten prüfen" : "Rapor verilerini kontrol et"}</summary><p>{language === "de" ? "Hier können die Angaben der einzelnen Bewerbungen für einen klaren Jobcenter-Bericht korrigiert werden." : "Buradan her başvurunun Jobcenter raporu için kurum, durum, tarih, takip ve geri dönüş bilgilerini düzeltebilirsin."}</p><div className="audit-editor-list">{applications.map(item => <ApplicationAuditEditor key={item.id} item={item} language={language} />)}</div></details>
           <div className="file-layout">
             <section className="file-list" id="basvurular" aria-label={language === "de" ? "Bewerbungsverfolgung" : "Başvuru takibi"}>
               <div className="list-intro"><div><p className="eyebrow"><span className="eyebrow-line" /> {t.records}</p><h2>{t.applications}</h2></div><span className="list-note">{t.clickToOpen} · {language === "de" ? "Vom neuesten zum ältesten Eintrag sortiert" : "En yeni başvurudan en eskiye sıralı"}</span></div>

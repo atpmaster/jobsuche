@@ -233,6 +233,29 @@ export async function updateApplicationStatus(formData: FormData) {
   revalidatePath("/");
 }
 
+export async function updateApplicationRecord(formData: FormData) {
+  const db = await prepareDb();
+  const id = Number(formData.get("id"));
+  const status = String(formData.get("status") || "saved");
+  const track = String(formData.get("track") || "other");
+  const score = Math.max(0, Math.min(100, Number(formData.get("score")) || 50));
+  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+  const appliedOn = String(formData.get("appliedOn") || "");
+  const nextActionDate = String(formData.get("nextActionDate") || "");
+  if (!Number.isInteger(id) || !statuses.has(status) || !["teaching", "cyber", "other"].includes(track)) return;
+  if ((appliedOn && !datePattern.test(appliedOn)) || (nextActionDate && !datePattern.test(nextActionDate))) return;
+  await db.prepare(`UPDATE applications SET company = ?, role = ?, track = ?, location = ?, score = ?, status = ?, source = ?, applied_on = ?, next_action = ?, next_action_date = ?, contact_name = ?, contact_email = ?, notes = ?, feedback = ? WHERE id = ? AND deleted_at IS NULL`)
+    .bind(
+      String(formData.get("company") || "").trim(), String(formData.get("role") || "").trim(), track,
+      String(formData.get("location") || "").trim() || null, score, status,
+      String(formData.get("source") || "").trim() || null, appliedOn || null,
+      String(formData.get("nextAction") || "").trim() || null, nextActionDate || null,
+      String(formData.get("contactName") || "").trim() || null, String(formData.get("contactEmail") || "").trim() || null,
+      String(formData.get("notes") || "").trim() || null, String(formData.get("feedback") || "").trim() || null, id,
+    ).run();
+  revalidatePath("/");
+}
+
 export async function updateApplicationStep(formData: FormData) {
   const db = await prepareDb();
   await db.prepare("UPDATE application_steps SET done = ? WHERE id = ?").bind(Number(formData.get("done")) ? 1 : 0, Number(formData.get("stepId"))).run();
