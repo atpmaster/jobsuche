@@ -242,6 +242,7 @@ export function Dashboard({ applications: allApplications, tasks, today, career 
   };
   const printReport = async () => {
     setPdfBusy(true); setPdfError("");
+    const viewer = window.open("about:blank", "_blank");
     try {
       const { buildReport } = await import("./report");
       if (invalidRange || !filtered.length) throw new Error("EMPTY_REPORT");
@@ -260,36 +261,18 @@ export function Dashboard({ applications: allApplications, tasks, today, career 
       const reportScope=[language==="de"?"Zeitraum: ":"Dönem: ",period,filterStatus?statuses[filterStatus]:t.all].join(" ");
       const doc = await buildReport(rows, language, formatDate(today, language, true), undefined, {customerNumber,signature,period:reportScope});
       // Chrome on some Windows installations can fail its post-download virus scan
-      // for client-generated Blob downloads. Show the valid PDF in an embedded
-      // viewer instead, so Chrome never has to scan a forced download.
-      const pdfUrl = doc.output("datauristring");
-      const viewer = document.createElement("div");
-      viewer.setAttribute("role", "dialog");
-      viewer.setAttribute("aria-modal", "true");
-      viewer.setAttribute("aria-label", language === "de" ? "PDF-Anzeige" : "PDF görüntüleyici");
-      viewer.style.cssText = "position:fixed;inset:0;z-index:1000;display:flex;flex-direction:column;background:#18202b;";
-      const toolbar = document.createElement("div");
-      toolbar.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 18px;color:#fff;font:600 14px system-ui,sans-serif;";
-      const label = document.createElement("span");
-      label.textContent = language === "de" ? "Jobcenter-Bericht" : "Jobcenter raporu";
-      const closeButton = document.createElement("button");
-      closeButton.type = "button";
-      closeButton.textContent = language === "de" ? "Schließen" : "Kapat";
-      closeButton.style.cssText = "border:1px solid #91a4bb;border-radius:8px;background:#fff;color:#18202b;padding:7px 12px;cursor:pointer;font:600 14px system-ui,sans-serif;";
-      const closeViewer = () => {
-        viewer.remove();
-      };
-      closeButton.addEventListener("click", closeViewer);
-      toolbar.appendChild(label);
-      toolbar.appendChild(closeButton);
-      const frame = document.createElement("iframe");
-      frame.src = pdfUrl;
-      frame.title = language === "de" ? "Bewerbungsnachweis" : "Başvuru raporu";
-      frame.style.cssText = "flex:1;width:100%;border:0;background:#fff;";
-      viewer.appendChild(toolbar);
-      viewer.appendChild(frame);
-      document.body.appendChild(viewer);
+      // Chrome on some Windows installations can fail its post-download virus scan
+      // for client-generated Blob downloads. Open the valid PDF in a tab that was
+      // created directly by the user's click, so no forced download is performed.
+      const pdfUrl = doc.output("bloburl");
+      if (viewer) {
+        viewer.location.href = pdfUrl;
+        window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 10 * 60 * 1000);
+      } else {
+        window.location.href = pdfUrl;
+      }
     } catch {
+      if (viewer && !viewer.closed) viewer.close();
       setPdfError(language === "de" ? "PDF konnte nicht erstellt werden. Bitte erneut versuchen." : "PDF oluşturulamadı. Lütfen tekrar deneyin.");
     } finally { setPdfBusy(false); }
   };
