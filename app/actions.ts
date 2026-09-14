@@ -4,6 +4,7 @@ import { env } from "cloudflare:workers";
 import { revalidatePath } from "next/cache";
 import { isDuplicate } from "./record-utils";
 import { getCareerData } from "./career-actions";
+import { syncGmailApplications } from "./gmail-sync";
 
 type Application = {
   deletedAt: string | null;
@@ -26,6 +27,7 @@ type Application = {
   nextAction: string | null;
   nextActionDate: string | null;
   feedback: string | null;
+  gmailMessageId: string | null;
 };
 
 type Task = { id: number; title: string; category: string; estimate: string; done: number };
@@ -46,6 +48,7 @@ async function prepareDb() {
     db.prepare(`CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, category TEXT NOT NULL DEFAULT 'Kariyer', estimate TEXT NOT NULL DEFAULT '30 dk', done INTEGER NOT NULL DEFAULT 0, sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`),
     db.prepare(`CREATE TABLE IF NOT EXISTS application_steps (id INTEGER PRIMARY KEY AUTOINCREMENT, application_id INTEGER NOT NULL, label TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0, sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`),
     db.prepare(`CREATE TABLE IF NOT EXISTS application_updates (id INTEGER PRIMARY KEY AUTOINCREMENT, application_id INTEGER NOT NULL, update_type TEXT NOT NULL DEFAULT 'Not', title TEXT NOT NULL, body TEXT, happened_on TEXT NOT NULL DEFAULT CURRENT_DATE, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS gmail_sync_state (id INTEGER PRIMARY KEY, last_sync_at TEXT, last_attempt_at TEXT, last_error TEXT, messages_imported INTEGER NOT NULL DEFAULT 0)`),
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status)`),
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_tasks_done_sort ON tasks(done, sort_order)`),
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_application_steps_app ON application_steps(application_id, sort_order)`),
@@ -62,6 +65,8 @@ async function prepareDb() {
     ensureColumn(db, "applications", "next_action", "TEXT"),
     ensureColumn(db, "applications", "next_action_date", "TEXT"),
     ensureColumn(db, "applications", "feedback", "TEXT"),
+    ensureColumn(db, "applications", "gmail_message_id", "TEXT"),
+    ensureColumn(db, "application_updates", "gmail_message_id", "TEXT"),
   ]);
 
   const seeds = [
@@ -177,9 +182,10 @@ async function prepareDb() {
 
 export async function getDashboardData() {
   const db = await prepareDb();
+  await syncGmailApplications(db);
   const career = await getCareerData();
   const [apps, tasks, updates, steps] = await Promise.all([
-    db.prepare(`SELECT id, deleted_at AS deletedAt, company, role, track, location, score, status, deadline, url, notes, source, applied_on AS appliedOn, contact_name AS contactName, contact_email AS contactEmail, contact_phone AS contactPhone, last_contact_on AS lastContactOn, next_action AS nextAction, next_action_date AS nextActionDate, feedback
+    db.prepare(`SELECT id, deleted_at AS deletedAt, company, role, track, location, score, status, deadline, url, notes, source, applied_on AS appliedOn, contact_name AS contactName, contact_email AS contactEmail, contact_phone AS contactPhone, last_contact_on AS lastContactOn, next_action AS nextAction, next_action_date AS nextActionDate, feedback, gmail_message_id AS gmailMessageId
       FROM applications ORDER BY COALESCE(applied_on, created_at) DESC, id DESC`).all<Application>(),
     db.prepare("SELECT id, title, category, estimate, done FROM tasks ORDER BY done ASC, sort_order ASC, id ASC LIMIT 8").all<Task>(),
     db.prepare("SELECT id, application_id AS applicationId, update_type AS updateType, title, body, happened_on AS happenedOn FROM application_updates ORDER BY happened_on DESC, id DESC").all<{ id: number; applicationId: number; updateType: string; title: string; body: string | null; happenedOn: string }>(),

@@ -1,0 +1,320 @@
+import { env } from "cloudflare:workers";
+import { isDuplicate, normalize } from "./record-utils";
+
+type Database = D1Database;
+
+type StoredApplication = {
+  id: number;
+  company: string;
+  role: string;
+  notes: string | null;
+  contactEmail: string | null;
+  gmailMessageId: string | null;
+};
+
+type GmailHeader = { name?: string; value?: string };
+type GmailPart = {
+  mimeType?: string;
+  filename?: string;
+  body?: { data?: string };
+  parts?: GmailPart[];
+};
+type GmailMessage = {
+  id: string;
+  internalDate?: string;
+  snippet?: string;
+  payload?: GmailPart & { headers?: GmailHeader[] };
+};
+type GmailListResponse = { messages?: Array<{ id: string }>; nextPageToken?: string };
+type TokenState = { accessToken: string; refreshToken: string | null };
+
+const APPLICATION_SUBJECT_WORDS = /bewerb|initiativ|schulbegleit|it[- ]?support|service[- ]?desk|cyber|security|trainee|lehrkraft|mathematik|pädagog|erzieher/i;
+const APPLICATION_BODY_WORDS = /hiermit\s+bewerbe|bewerbungsunterlagen|lebenslauf|anschreiben|für\s+die\s+(?:ausgeschriebene|offene)\s+stelle/i;
+const NOT_APPLICATION_WORDS = /jobcenter|arbeitsagentur|agentur\s+für\s+arbeit|kundennummer/i;
+const REJECTION_WORDS = /leider|absage|nicht\s+berücksichtigt|nicht\s+berücksichtigen|anderweitig\s+vergeben|stellenbesetzung|keine\s+einstellung/i;
+const INTERVIEW_WORDS = /vorstellungsgespräch|kennenlernen|interview|gespräch|telefonisch|termin/i;
+const OFFER_WORDS = /angebot|einstellung|arbeitsvertrag|willkommen|wir\s+freuen\s+uns,?\s+sie/i;
+
+const runtime = () => env as Record<string, string | undefined>;
+
+function getHeader(message: GmailMessage, name: string) {
+  return message.payload?.headers?.find((header) => header.name?.toLowerCase() === name.toLowerCase())?.value?.trim() ?? "";
+}
+
+function extractEmail(value: string) {
+  return value.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0]?.toLowerCase() ?? "";
+}
+
+function decodeBase64Url(value: string) {
+  try {
+    const binary = atob(value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "="));
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return "";
+  }
+}
+
+function stripHtml(value: string) {
+  return value
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function collectText(part: GmailPart | undefined, plain: string[], html: string[]) {
+  if (!part) return;
+  const data = part.body?.data;
+  if (data) {
+    if (part.mimeType === "text/plain") plain.push(decodeBase64Url(data));
+    if (part.mimeType === "text/html") html.push(stripHtml(decodeBase64Url(data)));
+  }
+  part.parts?.forEach((child) => collectText(child, plain, html));
+}
+
+function messageText(message: GmailMessage) {
+  const plain: string[] = [];
+  const html: string[] = [];
+  collectText(message.payload, plain, html);
+  return [...plain, ...html, message.snippet ?? ""].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+}
+
+function berlinDate(internalDate: string | undefined) {
+  const date = new Date(Number(internalDate));
+  if (!Number.isFinite(date.getTime())) return new Date().toISOString().slice(0, 10);
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function addDays(dateValue: string, days: number) {
+  const date = new Date(`${dateValue}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function companyFromEmail(email: string) {
+  const domain = email.split("@")[1]?.split(".")[0] ?? "";
+  if (!domain) return "";
+  return domain.replace(/[-_]+/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function cleanSubject(subject: string) {
+  return subject.replace(/^(?:(?:re|aw|wg|fwd|fw):\s*)+/i, "").replace(/\s+/g, " ").trim();
+}
+
+function parseApplication(message: GmailMessage) {
+  const subject = getHeader(message, "Subject");
+  const to = getHeader(message, "To");
+  const recipientEmail = extractEmail(to);
+  const body = messageText(message);
+  const subjectIsRelevant = APPLICATION_SUBJECT_WORDS.test(subject);
+  const bodyIsRelevant = APPLICATION_BODY_WORDS.test(body);
+  if (!subjectIsRelevant && !bodyIsRelevant) return null;
+  if (NOT_APPLICATION_WORDS.test(subject) && !/bewerb|bewerbe/i.test(subject)) return null;
+
+  const clean = cleanSubject(subject);
+  let role = clean.replace(/^initiativbewerbung\s*(?:als|für)?\s*/i, "").replace(/^bewerbung\s+(?:als|für|um)\s*/i, "").trim();
+  let company = companyFromEmail(recipientEmail);
+  const separated = clean.match(/^(?:initiativbewerbung|bewerbung)(?:\s+(?:als|für|um))?\s+(.+?)\s+[–—-]\s+(.+)$/i);
+  if (separated) {
+    role = separated[1].trim();
+    company = separated[2].trim();
+  }
+  const bei = clean.match(/^(?:initiativbewerbung|bewerbung)(?:\s+(?:als|für|um))?\s+(.+?)\s+bei\s+(.+)$/i);
+  if (bei) {
+    role = bei[1].trim();
+    company = bei[2].trim();
+  }
+  role = role || "Bewerbung";
+  company = company || "Arbeitgeber aus Gmail";
+
+  const haystack = `${subject} ${body}`;
+  const track = /cyber|security|it[- ]?support|service[- ]?desk|trainee|netzwerk|informatik/i.test(haystack)
+    ? "cyber"
+    : /schule|schulbegleit|pädagog|kinder|jugend|lehrkraft|mathematik|erzieher/i.test(haystack)
+      ? "teaching"
+      : "other";
+  const location = haystack.match(/\b(Gifhorn|Lüneburg|Wolfsburg|Braunschweig|Hannover|Bremen|Hamburg)\b/i)?.[1] ?? null;
+  const appliedOn = berlinDate(message.internalDate);
+  return {
+    company,
+    role,
+    track,
+    location,
+    score: track === "cyber" ? 82 : track === "teaching" ? 80 : 70,
+    appliedOn,
+    nextActionDate: addDays(appliedOn, 7),
+    contactEmail: recipientEmail || null,
+    subject: subject || "Gmail başvurusu",
+    body,
+  };
+}
+
+function likelyApplicationSubject(subject: string, body: string) {
+  return APPLICATION_SUBJECT_WORDS.test(subject) || APPLICATION_BODY_WORDS.test(body);
+}
+
+function applicationMatch(message: GmailMessage, apps: StoredApplication[]) {
+  const subject = getHeader(message, "Subject");
+  const from = getHeader(message, "From");
+  const fromEmail = extractEmail(from);
+  const haystack = normalize(`${subject} ${from} ${fromEmail}`);
+  return apps.find((application) => {
+    if (application.contactEmail && fromEmail && application.contactEmail.toLowerCase() === fromEmail) return true;
+    const company = normalize(application.company);
+    if (company.length >= 5 && haystack.includes(company)) return true;
+    const companyParts = application.company.split(/\s+/).map(normalize).filter((part) => part.length >= 5);
+    if (companyParts.some((part) => haystack.includes(part))) return true;
+    const role = normalize(application.role);
+    return role.length >= 8 && haystack.includes(role);
+  });
+}
+
+function responseStatus(text: string) {
+  if (REJECTION_WORDS.test(text)) return "rejected";
+  if (OFFER_WORDS.test(text)) return "offer";
+  if (INTERVIEW_WORDS.test(text)) return "interview";
+  return null;
+}
+
+async function refreshAccessToken(db: Database, state: TokenState) {
+  const values = runtime();
+  if (!state.refreshToken || !values.GOOGLE_CLIENT_ID || !values.GOOGLE_CLIENT_SECRET) throw new Error("GMAIL_REFRESH_NOT_CONFIGURED");
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: values.GOOGLE_CLIENT_ID,
+      client_secret: values.GOOGLE_CLIENT_SECRET,
+      refresh_token: state.refreshToken,
+      grant_type: "refresh_token",
+    }),
+  });
+  if (!response.ok) throw new Error(`GMAIL_REFRESH_${response.status}`);
+  const result = await response.json() as { access_token?: string };
+  if (!result.access_token) throw new Error("GMAIL_REFRESH_EMPTY");
+  state.accessToken = result.access_token;
+  await db.prepare("UPDATE gmail_connection SET access_token = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1").bind(state.accessToken).run();
+}
+
+async function gmailJson<T>(db: Database, state: TokenState, url: string): Promise<T> {
+  let response = await fetch(url, { headers: { Authorization: `Bearer ${state.accessToken}` } });
+  if (response.status === 401) {
+    await refreshAccessToken(db, state);
+    response = await fetch(url, { headers: { Authorization: `Bearer ${state.accessToken}` } });
+  }
+  if (!response.ok) throw new Error(`GMAIL_API_${response.status}`);
+  return await response.json() as T;
+}
+
+async function listMessages(db: Database, state: TokenState, query: string) {
+  const ids: string[] = [];
+  let pageToken = "";
+  for (let page = 0; page < 2; page += 1) {
+    const params = new URLSearchParams({ q: query, maxResults: "50" });
+    if (pageToken) params.set("pageToken", pageToken);
+    const data = await gmailJson<GmailListResponse>(db, state, `https://gmail.googleapis.com/gmail/v1/users/me/messages?${params.toString()}`);
+    ids.push(...(data.messages ?? []).map((message) => message.id));
+    if (!data.nextPageToken) break;
+    pageToken = data.nextPageToken;
+  }
+  return ids;
+}
+
+async function getMessage(db: Database, state: TokenState, id: string) {
+  return gmailJson<GmailMessage>(db, state, `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(id)}?format=full`);
+}
+
+async function addDefaultSteps(db: Database, applicationId: number) {
+  const steps = ["İlanı ve şartları kontrol et", "CV ve Anschreiben uyarla", "Başvuruyu gönder", "Geri dönüşü kaydet"];
+  await db.batch(steps.map((label, index) => db.prepare("INSERT INTO application_steps (application_id, label, sort_order) VALUES (?, ?, ?)").bind(applicationId, label, index)));
+}
+
+async function importSentMessages(db: Database, state: TokenState, ids: string[], apps: StoredApplication[]) {
+  let imported = 0;
+  for (const id of ids) {
+    if (apps.some((application) => application.gmailMessageId === id)) continue;
+    const message = await getMessage(db, state, id);
+    const candidate = parseApplication(message);
+    if (!candidate || !likelyApplicationSubject(candidate.subject, candidate.body)) continue;
+    const duplicate = apps.find((application) => isDuplicate(application, { company: candidate.company, role: candidate.role, notes: candidate.subject }));
+    if (duplicate) {
+      if (!duplicate.gmailMessageId) await db.prepare("UPDATE applications SET gmail_message_id = ? WHERE id = ?").bind(id, duplicate.id).run();
+      duplicate.gmailMessageId = id;
+      continue;
+    }
+    const notes = `Gmail'den otomatik aktarıldı. E-posta konusu: ${candidate.subject}`.slice(0, 500);
+    const result = await db.prepare(`INSERT INTO applications (company, role, track, location, score, status, notes, source, applied_on, contact_email, next_action, next_action_date, gmail_message_id)
+      VALUES (?, ?, ?, ?, ?, 'applied', ?, 'Gmail / Gesendete E-Mails', ?, ?, 'Eingangsbestätigung prüfen', ?, ?)`).bind(
+      candidate.company, candidate.role, candidate.track, candidate.location, candidate.score, notes, candidate.appliedOn, candidate.contactEmail, candidate.nextActionDate, id,
+    ).run();
+    const applicationId = Number(result.meta.last_row_id);
+    await db.batch([
+      db.prepare("INSERT INTO application_updates (application_id, update_type, title, body, happened_on, gmail_message_id) VALUES (?, 'E-posta', ?, ?, ?, ?)").bind(applicationId, "Bewerbung aus Gmail importiert", candidate.subject, candidate.appliedOn, id),
+      db.prepare("INSERT INTO application_steps (application_id, label, sort_order) VALUES (?, ?, ?)").bind(applicationId, "İlanı ve şartları kontrol et", 0),
+      db.prepare("INSERT INTO application_steps (application_id, label, sort_order) VALUES (?, ?, ?)").bind(applicationId, "CV ve Anschreiben uyarla", 1),
+      db.prepare("INSERT INTO application_steps (application_id, label, sort_order) VALUES (?, ?, ?)").bind(applicationId, "Başvuruyu gönder", 2),
+      db.prepare("INSERT INTO application_steps (application_id, label, sort_order) VALUES (?, ?, ?)").bind(applicationId, "Geri dönüşü kaydet", 3),
+    ]);
+    apps.push({ id: applicationId, company: candidate.company, role: candidate.role, notes, contactEmail: candidate.contactEmail, gmailMessageId: id });
+    imported += 1;
+  }
+  return imported;
+}
+
+async function importReplies(db: Database, state: TokenState, ids: string[], apps: StoredApplication[]) {
+  let updates = 0;
+  for (const id of ids) {
+    const message = await getMessage(db, state, id);
+    const application = applicationMatch(message, apps);
+    if (!application) continue;
+    const existing = await db.prepare("SELECT id FROM application_updates WHERE gmail_message_id = ?").bind(id).first<{ id: number }>();
+    if (existing?.id) continue;
+    const subject = getHeader(message, "Subject") || "Gmail yanıtı";
+    const date = berlinDate(message.internalDate);
+    const body = messageText(message).slice(0, 800);
+    const status = responseStatus(`${subject} ${body}`);
+    const statements = [
+      db.prepare("INSERT INTO application_updates (application_id, update_type, title, body, happened_on, gmail_message_id) VALUES (?, 'E-posta', ?, ?, ?, ?)").bind(application.id, `Gmail yanıtı: ${subject}`.slice(0, 250), body || subject, date, id),
+      db.prepare("UPDATE applications SET feedback = ?, last_contact_on = ? WHERE id = ?").bind(body || subject, date, application.id),
+    ];
+    if (status) statements.push(db.prepare("UPDATE applications SET status = ? WHERE id = ?").bind(status, application.id));
+    await db.batch(statements);
+    updates += 1;
+  }
+  return updates;
+}
+
+export async function syncGmailApplications(db: Database) {
+  const connection = await db.prepare("SELECT access_token AS accessToken, refresh_token AS refreshToken FROM gmail_connection WHERE id = 1").first<{ accessToken: string; refreshToken: string | null }>();
+  if (!connection?.accessToken) return { connected: false, imported: 0, updates: 0 };
+
+  await db.prepare("INSERT OR IGNORE INTO gmail_sync_state (id) VALUES (1)").run();
+  const claimed = await db.prepare(`UPDATE gmail_sync_state SET last_attempt_at = CURRENT_TIMESTAMP
+    WHERE id = 1 AND (last_attempt_at IS NULL OR last_attempt_at <= datetime('now', '-45 seconds'))`).run();
+  if (!claimed.meta.changes) return { connected: true, imported: 0, updates: 0 };
+
+  try {
+    const state: TokenState = { accessToken: connection.accessToken, refreshToken: connection.refreshToken };
+    const appsResult = await db.prepare("SELECT id, company, role, notes, contact_email AS contactEmail, gmail_message_id AS gmailMessageId FROM applications WHERE deleted_at IS NULL").all<StoredApplication>();
+    const apps = appsResult.results;
+    const sentIds = await listMessages(db, state, "in:sent newer_than:180d");
+    const imported = await importSentMessages(db, state, sentIds, apps);
+    const inboxIds = await listMessages(db, state, "in:inbox -from:me newer_than:180d");
+    const updates = await importReplies(db, state, inboxIds, apps);
+    await db.prepare("UPDATE gmail_sync_state SET last_sync_at = CURRENT_TIMESTAMP, last_error = NULL, messages_imported = ? WHERE id = 1").bind(imported + updates).run();
+    return { connected: true, imported, updates };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await db.prepare("UPDATE gmail_sync_state SET last_error = ? WHERE id = 1").bind(message.slice(0, 250)).run();
+    console.error("[gmail-sync] synchronization failed", message);
+    return { connected: true, imported: 0, updates: 0, error: message };
+  }
+}
