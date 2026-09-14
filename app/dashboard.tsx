@@ -259,7 +259,18 @@ export function Dashboard({ applications: allApplications, tasks, today, career 
       const period=[dateFrom||"…",dateTo||"…"].join(" – ");
       const reportScope=[language==="de"?"Zeitraum: ":"Dönem: ",period,filterStatus?statuses[filterStatus]:t.all].join(" ");
       const doc = await buildReport(rows, language, formatDate(today, language, true), undefined, {customerNumber,signature,period:reportScope});
-      doc.save(`Ahmet-Tepe-${language === "de" ? "Bewerbungsnachweis" : "Basvuru-Raporu"}-${today}.pdf`);
+      // Chrome on some Windows installations can fail its post-download virus scan
+      // for client-generated Blob downloads. Open the valid PDF in the built-in
+      // viewer instead; the viewer still offers Save/Download without a forced
+      // download from the application.
+      const pdfUrl = doc.output("bloburl");
+      const viewer = window.open("about:blank", "_blank", "noopener,noreferrer");
+      if (viewer) {
+        viewer.location.href = pdfUrl;
+      } else {
+        window.location.href = pdfUrl;
+      }
+      window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 10 * 60 * 1000);
     } catch {
       setPdfError(language === "de" ? "PDF konnte nicht erstellt werden. Bitte erneut versuchen." : "PDF oluşturulamadı. Lütfen tekrar deneyin.");
     } finally { setPdfBusy(false); }
@@ -290,7 +301,7 @@ export function Dashboard({ applications: allApplications, tasks, today, career 
         <section className="workspace">
           <header className="workspace-header">
             <div><p className="breadcrumb">AHMET TEPE <span>/</span> {t.searchArea}</p><h1>{t.title}<span>.</span></h1><p className="workspace-intro">{t.intro}</p></div>
-            <div className="header-actions"><div className="language-switcher" aria-label={t.selectedLanguage}><span>{t.selectedLanguage}</span><button className={language === "tr" ? "selected" : ""} type="button" onClick={() => changeLanguage("tr")} aria-pressed={language === "tr"}><img src="/flags/tr.svg" width="24" height="16" alt="" /> Türkçe</button><button className={language === "de" ? "selected" : ""} type="button" onClick={() => changeLanguage("de")} aria-pressed={language === "de"}><img src="/flags/de.svg" width="24" height="16" alt="" /> Deutsch</button></div><button className="report-button" type="button" onClick={printReport} disabled={pdfBusy} aria-busy={pdfBusy}><span>↓</span><strong>{pdfBusy ? (language === "de" ? "Wird erstellt…" : "Hazırlanıyor…") : t.pdf}</strong><small>{t.pdfHint}</small></button><LiveRefresh language={language} /><details className="add-menu" onKeyDown={event => { if (event.key === "Escape") { event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }}><summary><span>＋</span> {t.newApplication}</summary><div className="form-popover">
+            <div className="header-actions"><div className="language-switcher" aria-label={t.selectedLanguage}><span>{t.selectedLanguage}</span><button className={language === "tr" ? "selected" : ""} type="button" onClick={() => changeLanguage("tr")} aria-pressed={language === "tr"}><img src="/flags/tr.svg" width="24" height="16" alt="" /> Türkçe</button><button className={language === "de" ? "selected" : ""} type="button" onClick={() => changeLanguage("de")} aria-pressed={language === "de"}><img src="/flags/de.svg" width="24" height="16" alt="" /> Deutsch</button></div><a className="gmail-connect" href="/api/gmail/connect">{language === "de" ? "Gmail verbinden" : "Gmail'i bağla"}</a><button className="report-button" type="button" onClick={printReport} disabled={pdfBusy} aria-busy={pdfBusy}><span>↓</span><strong>{pdfBusy ? (language === "de" ? "Wird erstellt…" : "Hazırlanıyor…") : t.pdf}</strong><small>{t.pdfHint}</small></button><LiveRefresh language={language} /><details className="add-menu" onKeyDown={event => { if (event.key === "Escape") { event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }}><summary><span>＋</span> {t.newApplication}</summary><div className="form-popover">
               <div className="popover-head"><div><p className="eyebrow">{t.addToFile}</p><h3>{t.newOpportunity}</h3><p>{t.saveOpportunityHint}</p></div><button className="close-panel" type="button" aria-label={t.dismiss} onClick={event => { const panel = event.currentTarget.closest("details"); if (panel) panel.open = false; }}>×</button></div>
               <form action={saveApplication}>
                 {saveError && <p role="alert">{saveError}</p>}
