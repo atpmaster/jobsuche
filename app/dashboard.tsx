@@ -32,10 +32,10 @@ const copy = {
 } as const;
 
 const statusLabels: Record<Language, Record<string, string>> = {
-  tr: { saved: "Kaydedildi", preparing: "Hazırlanıyor", applied: "Gönderildi", interview: "Mülakat", offer: "Teklif", rejected: "Olumsuz", withdrawn: "Vazgeçildi" },
-  de: { saved: "Gespeichert", preparing: "Vorbereitung", applied: "Gesendet", interview: "Vorstellungsgespräch", offer: "Angebot", rejected: "Absage", withdrawn: "Zurückgezogen" },
+  tr: { new: "Yeni başvuru", listed: "Listeye eklendi", sent: "Gönderildi", waiting: "Cevap bekleniyor", received: "Cevap geldi", withdrawn: "Kayıt dışı", saved: "Yeni başvuru", preparing: "Listeye eklendi", applied: "Cevap bekleniyor", interview: "Cevap geldi", offer: "Cevap geldi", rejected: "Cevap geldi" },
+  de: { new: "Neue Bewerbung", listed: "Zur Liste hinzugefügt", sent: "Gesendet", waiting: "Rückmeldung ausstehend", received: "Rückmeldung erhalten", withdrawn: "Kein Bewerbungsvorgang", saved: "Neue Bewerbung", preparing: "Zur Liste hinzugefügt", applied: "Rückmeldung ausstehend", interview: "Rückmeldung erhalten", offer: "Rückmeldung erhalten", rejected: "Rückmeldung erhalten" },
 };
-const statusOrder = ["saved", "preparing", "applied", "interview", "offer", "rejected", "withdrawn"];
+const statusOrder = ["new", "listed", "sent", "waiting", "received"];
 const trackLabels: Record<Language, Record<string, string>> = { tr: { teaching: "Eğitim", cyber: "Siber güvenlik", other: "Alternatif" }, de: { teaching: "Bildung", cyber: "Cybersecurity", other: "Sonstige" } };
 const updateTypeOptions: Record<Language, Array<{ value: string; label: string }>> = { tr: [{ value: "Not", label: "Not" }, { value: "E-posta", label: "E-posta" }, { value: "Telefon", label: "Telefon" }, { value: "Mülakat", label: "Mülakat" }, { value: "Durum", label: "Durum" }], de: [{ value: "Notiz", label: "Notiz" }, { value: "E-Mail", label: "E-Mail" }, { value: "Telefon", label: "Telefon" }, { value: "Vorstellungsgespräch", label: "Vorstellungsgespräch" }, { value: "Status", label: "Status" }] };
 const statusForLanguage = (language: Language) => statusLabels[language];
@@ -103,9 +103,9 @@ function localizedSource(value: string | null | undefined, language: Language) {
 
 function localizedContent(value: string | null | undefined, language: Language) {
   if (!value) return value;
-  const statusTitle = value.match(/^Durum: (saved|preparing|applied|interview|offer|rejected|withdrawn)$/);
+  const statusTitle = value.match(/^Durum: (new|listed|sent|waiting|received|saved|preparing|applied|interview|offer|rejected|withdrawn)$/);
   if (statusTitle) return `${language === "de" ? "Status" : "Durum"}: ${statusLabels[language][statusTitle[1]]}`;
-  const statusBody = value.match(/^Başvuru durumu (saved|preparing|applied|interview|offer|rejected|withdrawn) olarak güncellendi\.$/);
+  const statusBody = value.match(/^Başvuru durumu (new|listed|sent|waiting|received|saved|preparing|applied|interview|offer|rejected|withdrawn) olarak güncellendi\.$/);
   if (statusBody) return language === "de" ? `Bewerbungsstatus auf ${statusLabels.de[statusBody[1]]} aktualisiert.` : `Başvuru durumu ${statusLabels.tr[statusBody[1]].toLowerCase()} olarak güncellendi.`;
   const translations: Record<string, Record<Language, string>> = {
     "20–40 saat; başvuru portalında tamamlandı.": { tr: "20–40 saat; başvuru portalında tamamlandı.", de: "20–40 Stunden; im Bewerbungsportal abgeschlossen." },
@@ -230,10 +230,10 @@ export function Dashboard({ applications: allApplications, tasks, today, career 
   const statuses = statusForLanguage(language);
   const locale = language === "de" ? "de-DE" : "tr-TR";
   const todayLabel = new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date(`${today}T12:00:00`));
-  const openStatuses = new Set(["saved", "preparing", "applied", "interview"]);
+  const openStatuses = new Set(["new", "listed", "sent", "waiting"]);
   const active = applications.filter((item) => openStatuses.has(item.status));
-  const awaiting = applications.filter((item) => ["applied", "interview"].includes(item.status));
-  const inMotion = applications.filter((item) => ["interview", "offer"].includes(item.status));
+  const awaiting = applications.filter((item) => item.status === "waiting");
+  const inMotion = applications.filter((item) => item.status === "received");
   const followUps = applications.filter((item) => item.nextActionDate && item.nextActionDate <= today && openStatuses.has(item.status) && !dismissed.has(followUpKey(item)));
   const completedTasks = tasks.filter((task) => task.done).length;
   const avgScore = applications.length ? Math.round(applications.reduce((sum, item) => sum + item.score, 0) / applications.length) : 0;
@@ -382,7 +382,7 @@ export function Dashboard({ applications: allApplications, tasks, today, career 
         </section>
       </div>
 
-      <section className="print-report" aria-hidden="true"><header className="print-header"><div><p className="print-kicker">{t.pdfTitle}</p><h1>{t.pdfSubtitle}</h1></div><div className="print-meta"><span>{t.generated}</span><strong>{formatDate(today, language, true)}</strong><small>{language === "de" ? "Sprache: Deutsch" : "Dil: Türkçe"}</small></div></header><div className="print-summary"><span><strong>{applications.length}</strong> {t.applications.toLowerCase()}</span><span><strong>{active.length}</strong> {t.open}</span><span><strong>{awaiting.length}</strong> {t.awaiting}</span><span><strong>%{avgScore}</strong> {t.averageMatch}</span></div><table className="print-table"><thead><tr><th>{t.number}</th><th>{t.employer}</th><th>{t.reportSource}</th><th>{t.reportStatus}</th><th>{t.applicationDate}</th><th>{t.reportNext}</th></tr></thead><tbody>{applications.map((item, index) => <tr key={item.id}><td>{String(index + 1).padStart(2, "0")}</td><td><strong>{item.company}</strong><br /><span>{item.role}</span><br /><small>{item.location || t.noLocation}</small></td><td>{item.source || t.noSource}</td><td><span className={`print-status ${item.status}`}>{statuses[item.status] || item.status}</span></td><td>{item.appliedOn ? formatDate(item.appliedOn, language, true) : t.noDate}</td><td>{item.nextActionDate ? `${formatDate(item.nextActionDate, language, true)} - ${localizedContent(item.nextAction, language) || t.noNextAction}` : t.noPlan}</td></tr>)}</tbody></table><section className="print-details"><h2>{language === "de" ? "Hinweise zu den Bewerbungen" : "Başvurular için notlar"}</h2>{applications.map((item) => <article key={item.id}><h3>{item.company} - {item.role}</h3><p><strong>{t.reportContact}:</strong> {item.contactName || t.noContact}{item.contactEmail ? ` · ${item.contactEmail}` : ""}</p><p><strong>{t.notes}:</strong> {localizedContent(item.feedback, language) || localizedContent(item.notes, language) || t.noNote}</p></article>)}</section><footer className="print-footer">{t.reportFooter}</footer></section>
+      <section className="print-report" aria-hidden="true"><header className="print-header"><div><p className="print-kicker">{t.pdfTitle}</p><h1>{t.pdfSubtitle}</h1></div><div className="print-meta"><span>{t.generated}</span><strong>{formatDate(today, language, true)}</strong><small>{language === "de" ? "Sprache: Deutsch" : "Dil: Türkçe"}</small></div></header><div className="print-summary"><span><strong>{reportApplications.length}</strong> {t.applications.toLowerCase()}</span><span><strong>{reportApplications.filter(item => openStatuses.has(item.status)).length}</strong> {t.open}</span><span><strong>{reportApplications.filter(item => item.status === "waiting").length}</strong> {t.awaiting}</span><span><strong>%{reportApplications.length ? Math.round(reportApplications.reduce((sum, item) => sum + item.score, 0) / reportApplications.length) : 0}</strong> {t.averageMatch}</span></div><table className="print-table"><thead><tr><th>{t.number}</th><th>{t.employer}</th><th>{t.reportSource}</th><th>{t.reportStatus}</th><th>{t.applicationDate}</th><th>{t.reportNext}</th></tr></thead><tbody>{reportApplications.map((item, index) => <tr key={item.id}><td>{String(index + 1).padStart(2, "0")}</td><td><strong>{item.company}</strong><br /><span>{item.role}</span><br /><small>{item.location || t.noLocation}</small></td><td>{item.source || t.noSource}</td><td><span className={`print-status ${item.status}`}>{statuses[item.status] || item.status}</span></td><td>{item.appliedOn ? formatDate(item.appliedOn, language, true) : t.noDate}</td><td>{item.nextActionDate ? `${formatDate(item.nextActionDate, language, true)} - ${localizedContent(item.nextAction, language) || t.noNextAction}` : t.noPlan}</td></tr>)}</tbody></table><section className="print-details"><h2>{language === "de" ? "Hinweise zu den Bewerbungen" : "Başvurular için notlar"}</h2>{reportApplications.map((item) => <article key={item.id}><h3>{item.company} - {item.role}</h3><p><strong>{t.reportContact}:</strong> {item.contactName || t.noContact}{item.contactEmail ? ` · ${item.contactEmail}` : ""}</p><p><strong>{t.notes}:</strong> {localizedContent(item.feedback, language) || localizedContent(item.notes, language) || t.noNote}</p></article>)}</section><footer className="print-footer">{t.reportFooter}</footer></section>
     </main>
   );
 }

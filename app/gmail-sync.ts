@@ -32,9 +32,6 @@ const APPLICATION_SUBJECT_WORDS = /bewerb|initiativ|schulbegleit|it[- ]?support|
 const APPLICATION_BODY_WORDS = /hiermit\s+bewerbe|bewerbungsunterlagen|lebenslauf|anschreiben|für\s+die\s+(?:ausgeschriebene|offene)\s+stelle/i;
 const NOT_APPLICATION_WORDS = /jobcenter|arbeitsagentur|agentur\s+für\s+arbeit|kundennummer/i;
 const REPLY_FORWARD_SUBJECT = /^(?:(?:re|aw|wg|fwd|fw|antwort)\s*:\s*)+/i;
-const REJECTION_WORDS = /leider|absage|nicht\s+berücksichtigt|nicht\s+berücksichtigen|anderweitig\s+vergeben|stellenbesetzung|keine\s+einstellung/i;
-const INTERVIEW_WORDS = /vorstellungsgespräch|kennenlernen|interview|gespräch|telefonisch|termin/i;
-const OFFER_WORDS = /angebot|einstellung|arbeitsvertrag|willkommen|wir\s+freuen\s+uns,?\s+sie/i;
 
 const runtime = () => env as Record<string, string | undefined>;
 
@@ -180,11 +177,10 @@ function applicationMatch(message: GmailMessage, apps: StoredApplication[]) {
   });
 }
 
-function responseStatus(text: string) {
-  if (REJECTION_WORDS.test(text)) return "rejected";
-  if (OFFER_WORDS.test(text)) return "offer";
-  if (INTERVIEW_WORDS.test(text)) return "interview";
-  return null;
+function responseStatus(_text: string) {
+  // The tracker only needs to distinguish no response from a response.
+  // The complete message is retained in the timeline and feedback fields.
+  return "received";
 }
 
 async function refreshAccessToken(db: Database, state: TokenState) {
@@ -255,7 +251,7 @@ async function importSentMessages(db: Database, state: TokenState, ids: string[]
     }
     const notes = `Gmail'den otomatik aktarıldı. E-posta konusu: ${candidate.subject}`.slice(0, 500);
     const result = await db.prepare(`INSERT INTO applications (company, role, track, location, score, status, notes, source, applied_on, contact_email, next_action, next_action_date, gmail_message_id)
-      VALUES (?, ?, ?, ?, ?, 'applied', ?, 'Gmail / Gesendete E-Mails', ?, ?, 'Eingangsbestätigung prüfen', ?, ?)`).bind(
+      VALUES (?, ?, ?, ?, ?, 'waiting', ?, 'Gmail / Gesendete E-Mails', ?, ?, 'Eingangsbestätigung prüfen', ?, ?)`).bind(
       candidate.company, candidate.role, candidate.track, candidate.location, candidate.score, notes, candidate.appliedOn, candidate.contactEmail, candidate.nextActionDate, id,
     ).run();
     const applicationId = Number(result.meta.last_row_id);
@@ -288,7 +284,7 @@ async function importReplies(db: Database, state: TokenState, ids: string[], app
       db.prepare("INSERT INTO application_updates (application_id, update_type, title, body, happened_on, gmail_message_id) VALUES (?, 'E-posta', ?, ?, ?, ?)").bind(application.id, `Gmail yanıtı: ${subject}`.slice(0, 250), body || subject, date, id),
       db.prepare("UPDATE applications SET feedback = ?, last_contact_on = ? WHERE id = ?").bind(body || subject, date, application.id),
     ];
-    if (status) statements.push(db.prepare("UPDATE applications SET status = ? WHERE id = ?").bind(status, application.id));
+    statements.push(db.prepare("UPDATE applications SET status = ? WHERE id = ?").bind(status, application.id));
     await db.batch(statements);
     updates += 1;
   }

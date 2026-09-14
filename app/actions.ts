@@ -32,7 +32,17 @@ type Application = {
 
 type Task = { id: number; title: string; category: string; estimate: string; done: number };
 
-const statuses = new Set(["saved", "preparing", "applied", "interview", "offer", "rejected", "withdrawn"]);
+// Keep the workflow deliberately small. Legacy values remain accepted while old
+// records are migrated below, so older forms cannot corrupt an application.
+const statuses = new Set(["new", "listed", "sent", "waiting", "received", "withdrawn", "saved", "preparing", "applied", "interview", "offer", "rejected"]);
+const canonicalStatus = (value: string) => ({
+  saved: "new",
+  preparing: "listed",
+  applied: "waiting",
+  interview: "received",
+  offer: "received",
+  rejected: "received",
+}[value] ?? value);
 
 async function ensureColumn(db: D1Database, table: string, column: string, definition: string) {
   const info = await db.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>();
@@ -44,7 +54,7 @@ async function ensureColumn(db: D1Database, table: string, column: string, defin
 async function prepareDb() {
   const db = env.DB;
   await db.batch([
-    db.prepare(`CREATE TABLE IF NOT EXISTS applications (id INTEGER PRIMARY KEY AUTOINCREMENT, company TEXT NOT NULL, role TEXT NOT NULL, track TEXT NOT NULL DEFAULT 'other', location TEXT, score INTEGER NOT NULL DEFAULT 50 CHECK(score BETWEEN 0 AND 100), status TEXT NOT NULL DEFAULT 'saved', deadline TEXT, url TEXT, notes TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS applications (id INTEGER PRIMARY KEY AUTOINCREMENT, company TEXT NOT NULL, role TEXT NOT NULL, track TEXT NOT NULL DEFAULT 'other', location TEXT, score INTEGER NOT NULL DEFAULT 50 CHECK(score BETWEEN 0 AND 100), status TEXT NOT NULL DEFAULT 'new', deadline TEXT, url TEXT, notes TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`),
     db.prepare(`CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, category TEXT NOT NULL DEFAULT 'Kariyer', estimate TEXT NOT NULL DEFAULT '30 dk', done INTEGER NOT NULL DEFAULT 0, sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`),
     db.prepare(`CREATE TABLE IF NOT EXISTS application_steps (id INTEGER PRIMARY KEY AUTOINCREMENT, application_id INTEGER NOT NULL, label TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0, sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`),
     db.prepare(`CREATE TABLE IF NOT EXISTS application_updates (id INTEGER PRIMARY KEY AUTOINCREMENT, application_id INTEGER NOT NULL, update_type TEXT NOT NULL DEFAULT 'Not', title TEXT NOT NULL, body TEXT, happened_on TEXT NOT NULL DEFAULT CURRENT_DATE, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`),
@@ -70,6 +80,13 @@ async function prepareDb() {
     ensureColumn(db, "application_updates", "gmail_message_id", "TEXT"),
   ]);
 
+  await db.batch([
+    db.prepare("UPDATE applications SET status = 'new' WHERE status = 'saved'"),
+    db.prepare("UPDATE applications SET status = 'listed' WHERE status = 'preparing'"),
+    db.prepare("UPDATE applications SET status = 'waiting' WHERE status = 'applied'"),
+    db.prepare("UPDATE applications SET status = 'received' WHERE status IN ('interview', 'offer', 'rejected')"),
+  ]);
+
   const seeds = [
     {
       company: "myschoolcare Nord GmbH",
@@ -77,7 +94,7 @@ async function prepareDb() {
       track: "teaching",
       location: "Gifhorn",
       score: 88,
-      status: "applied",
+      status: "waiting",
       appliedOn: "2026-08-03",
       source: "Arbeitsagentur / myschoolcare",
       url: "https://www.arbeitsagentur.de/jobsuche/jobdetail/10000-1204133381-S",
@@ -91,7 +108,7 @@ async function prepareDb() {
       track: "cyber",
       location: "Gifhorn",
       score: 93,
-      status: "applied",
+      status: "waiting",
       appliedOn: "2026-09-08",
       source: "Landkreis Gifhorn / Bewerbermanagement",
       url: "https://bewerbermanagement.net/jobposting/14082e0cb1e54183403193689bda5f5475cb6338",
@@ -105,7 +122,7 @@ async function prepareDb() {
       track: "cyber",
       location: "Gifhorn",
       score: 90,
-      status: "applied",
+      status: "waiting",
       appliedOn: "2026-09-02",
       source: "IT-Verbund Gifhorn / Karriereportal",
       url: "https://itvgf.de/",
@@ -120,7 +137,7 @@ async function prepareDb() {
       track: "teaching",
       location: "Gifhorn",
       score: 96,
-      status: "applied",
+      status: "waiting",
       appliedOn: "2026-09-11",
       source: "EIS-Online-BBS / E-Mail",
       url: "https://www.eis-online-bbs.niedersachsen.de/",
@@ -211,7 +228,8 @@ export async function addApplication(formData: FormData) {
   const existing = await db.prepare("SELECT company, role, notes FROM applications").all<{company: string; role: string; notes: string|null}>();
   if (existing.results.some(item => isDuplicate(item, candidate))) throw new Error("DUPLICATE_APPLICATION");
   const score = Math.max(0, Math.min(100, Number(formData.get("score")) || 50));
-  const status = statuses.has(String(formData.get("status"))) ? String(formData.get("status")) : "saved";
+  const requestedStatus = String(formData.get("status") || "new");
+  const status = statuses.has(requestedStatus) ? canonicalStatus(requestedStatus) : "new";
   await db.prepare(`INSERT INTO applications (company, role, track, location, score, status, deadline, url, notes, source, applied_on, contact_name, contact_email, contact_phone, next_action, next_action_date)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(
@@ -225,10 +243,11 @@ export async function addApplication(formData: FormData) {
 
 export async function updateApplicationStatus(formData: FormData) {
   const db = await prepareDb();
-  const status = String(formData.get("status"));
-  if (!statuses.has(status)) return;
+  const requestedStatus = String(formData.get("status"));
+  if (!statuses.has(requestedStatus)) return;
+  const status = canonicalStatus(requestedStatus);
   const id = Number(formData.get("id"));
-  await db.prepare("UPDATE applications SET status = ?, last_contact_on = CASE WHEN ? IN ('interview', 'offer') THEN CURRENT_DATE ELSE last_contact_on END WHERE id = ?").bind(status, status, id).run();
+  await db.prepare("UPDATE applications SET status = ?, last_contact_on = CASE WHEN ? = 'received' THEN CURRENT_DATE ELSE last_contact_on END WHERE id = ?").bind(status, status, id).run();
   await db.prepare("INSERT INTO application_updates (application_id, update_type, title, body) VALUES (?, 'Durum', ?, ?)").bind(id, `Durum: ${status}`, `Başvuru durumu ${status} olarak güncellendi.`).run();
   revalidatePath("/");
 }
@@ -236,13 +255,14 @@ export async function updateApplicationStatus(formData: FormData) {
 export async function updateApplicationRecord(formData: FormData) {
   const db = await prepareDb();
   const id = Number(formData.get("id"));
-  const status = String(formData.get("status") || "saved");
+  const requestedStatus = String(formData.get("status") || "new");
+  const status = canonicalStatus(requestedStatus);
   const track = String(formData.get("track") || "other");
   const score = Math.max(0, Math.min(100, Number(formData.get("score")) || 50));
   const datePattern = /^\d{4}-\d{2}-\d{2}$/;
   const appliedOn = String(formData.get("appliedOn") || "");
   const nextActionDate = String(formData.get("nextActionDate") || "");
-  if (!Number.isInteger(id) || !statuses.has(status) || !["teaching", "cyber", "other"].includes(track)) return;
+  if (!Number.isInteger(id) || !statuses.has(requestedStatus) || !["teaching", "cyber", "other"].includes(track)) return;
   if ((appliedOn && !datePattern.test(appliedOn)) || (nextActionDate && !datePattern.test(nextActionDate))) return;
   await db.prepare(`UPDATE applications SET company = ?, role = ?, track = ?, location = ?, score = ?, status = ?, source = ?, applied_on = ?, next_action = ?, next_action_date = ?, contact_name = ?, contact_email = ?, notes = ?, feedback = ? WHERE id = ? AND deleted_at IS NULL`)
     .bind(

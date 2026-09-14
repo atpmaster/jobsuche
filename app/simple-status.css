@@ -1,0 +1,5 @@
+/* Visible colors for the intentionally small application workflow. */
+.status-pill.new, .status-pill.listed { color: #656d76; background: #eaeef2; }
+.status-pill.sent, .status-pill.waiting { color: var(--green); background: var(--green-soft); }
+.status-pill.received { color: var(--purple); background: var(--purple-soft); }
+.status-pill.withdrawn { color: var(--red); background: var(--red-soft); }
