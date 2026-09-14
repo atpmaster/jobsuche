@@ -264,13 +264,7 @@ export function Dashboard({ applications: allApplications, tasks, today, career 
       // viewer instead; the viewer still offers Save/Download without a forced
       // download from the application.
       const pdfUrl = doc.output("bloburl");
-      const viewerLink = document.createElement("a");
-      viewerLink.href = pdfUrl;
-      viewerLink.setAttribute("aria-hidden", "true");
-      document.body.appendChild(viewerLink);
-      viewerLink.click();
-      viewerLink.remove();
-      window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 10 * 60 * 1000);
+      window.location.href = pdfUrl;
     } catch {
       setPdfError(language === "de" ? "PDF konnte nicht erstellt werden. Bitte erneut versuchen." : "PDF oluşturulamadı. Lütfen tekrar deneyin.");
     } finally { setPdfBusy(false); }
