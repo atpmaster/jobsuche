@@ -121,6 +121,8 @@ const fallbackReplacements: Array<[RegExp, string, string]> = [
   [/sowie die aktualisierten Unterlagen wurden am/g, "ve güncellenmiş belgeler tarihinde", "sowie die aktualisierten Unterlagen wurden am"],
   [/nachgereicht/g, "sonradan gönderildi", "nachgereicht"],
   [/Antwort:/g, "Yanıt:", "Antwort:"],
+  [/Bewerbung als /g, "Başvuru: ", "Bewerbung als "],
+  [/ in Gifhorn/g, " Gifhorn'da", " in Gifhorn"],
   [/şirketinde/g, "şirketinde", "bei"],
   [/anfordern/g, "iste", "anfordern"],
   [/nachfassen/g, "takip et", "nachfassen"],
