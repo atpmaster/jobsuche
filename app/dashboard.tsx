@@ -20,7 +20,7 @@ export type Application = {
   nextAction: string | null; nextActionDate: string | null; feedback: string | null; gmailMessageId?: string | null; steps: Step[]; updates: Update[];
 };
 type Task = { id: number; title: string; category: string; estimate: string; done: number };
-type DashboardProps = { applications: Application[]; tasks: Task[]; today: string; career: CareerData };
+type DashboardProps = { applications: Application[]; tasks: Task[]; today: string; career: CareerData; gmailConnected: boolean };
 
 const copy = {
   tr: {
@@ -151,7 +151,7 @@ function ApplicationAuditEditor({ item, language }: { item: Application; languag
   </form></details>;
 }
 
-export function Dashboard({ applications: allApplications, tasks, today, career }: DashboardProps) {
+export function Dashboard({ applications: allApplications, tasks, today, career, gmailConnected }: DashboardProps) {
   const [language, setLanguage] = useState<Language>("tr");
   const applications = allApplications.filter(item => !item.deletedAt && !isReportNoise(item)).map(item => {
     const sources=allApplications.filter(a=>career.merges.some(m=>m.sourceId===a.id&&m.targetId===item.id));
@@ -286,7 +286,7 @@ export function Dashboard({ applications: allApplications, tasks, today, career 
         <section className="workspace">
           <header className="workspace-header">
             <div><p className="breadcrumb">AHMET TEPE <span>/</span> {t.searchArea}</p><h1>{t.title}<span>.</span></h1><p className="workspace-intro">{t.intro}</p></div>
-            <div className="header-actions"><div className="language-switcher" aria-label={t.selectedLanguage}><span>{t.selectedLanguage}</span><button className={language === "tr" ? "selected" : ""} type="button" onClick={() => changeLanguage("tr")} aria-pressed={language === "tr"}><img src="/flags/tr.svg" width="24" height="16" alt="" /> Türkçe</button><button className={language === "de" ? "selected" : ""} type="button" onClick={() => changeLanguage("de")} aria-pressed={language === "de"}><img src="/flags/de.svg" width="24" height="16" alt="" /> Deutsch</button></div><a className="gmail-connect" href="/api/gmail/connect">{language === "de" ? "Gmail verbinden" : "Gmail'i bağla"}</a><button className="report-button" type="button" onClick={printReport} disabled={pdfBusy} aria-busy={pdfBusy}><span>↓</span><strong>{pdfBusy ? (language === "de" ? "Wird erstellt…" : "Hazırlanıyor…") : t.pdf}</strong><small>{t.pdfHint}</small></button><LiveRefresh language={language} /><details className="add-menu" onKeyDown={event => { if (event.key === "Escape") { event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }}><summary><span>＋</span> {t.newApplication}</summary><div className="form-popover">
+            <div className="header-actions"><div className="language-switcher" aria-label={t.selectedLanguage}><span>{t.selectedLanguage}</span><button className={language === "tr" ? "selected" : ""} type="button" onClick={() => changeLanguage("tr")} aria-pressed={language === "tr"}><img src="/flags/tr.svg" width="24" height="16" alt="" /> Türkçe</button><button className={language === "de" ? "selected" : ""} type="button" onClick={() => changeLanguage("de")} aria-pressed={language === "de"}><img src="/flags/de.svg" width="24" height="16" alt="" /> Deutsch</button></div>{gmailConnected ? <span className="gmail-connect gmail-connected" role="status">● {language === "de" ? "Gmail verbunden" : "Gmail bağlı"}</span> : <a className="gmail-connect" href="/api/gmail/connect">{language === "de" ? "Gmail verbinden" : "Gmail'i bağla"}</a>}<button className="report-button" type="button" onClick={printReport} disabled={pdfBusy} aria-busy={pdfBusy}><span>↓</span><strong>{pdfBusy ? (language === "de" ? "Wird erstellt…" : "Hazırlanıyor…") : t.pdf}</strong><small>{t.pdfHint}</small></button><LiveRefresh language={language} /><details className="add-menu" onKeyDown={event => { if (event.key === "Escape") { event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }}><summary><span>＋</span> {t.newApplication}</summary><div className="form-popover">
               <div className="popover-head"><div><p className="eyebrow">{t.addToFile}</p><h3>{t.newOpportunity}</h3><p>{t.saveOpportunityHint}</p></div><button className="close-panel" type="button" aria-label={t.dismiss} onClick={event => { const panel = event.currentTarget.closest("details"); if (panel) panel.open = false; }}>×</button></div>
               <form action={saveApplication}>
                 {saveError && <p role="alert">{saveError}</p>}

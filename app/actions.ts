@@ -201,7 +201,7 @@ async function prepareDb() {
 
 export async function getDashboardData() {
   const db = await prepareDb();
-  await syncGmailApplications(db);
+  const gmailSync = await syncGmailApplications(db);
   const career = await getCareerData();
   const [apps, tasks, updates, steps] = await Promise.all([
     db.prepare(`SELECT id, deleted_at AS deletedAt, company, role, track, location, score, status, deadline, url, notes, source, applied_on AS appliedOn, contact_name AS contactName, contact_email AS contactEmail, contact_phone AS contactPhone, last_contact_on AS lastContactOn, next_action AS nextAction, next_action_date AS nextActionDate, feedback, gmail_message_id AS gmailMessageId
@@ -213,6 +213,7 @@ export async function getDashboardData() {
 
   return {
     career,
+    gmailConnected: gmailSync.connected,
     applications: apps.results.map((application) => ({
       ...application,
       updates: updates.results.filter((item) => item.applicationId === application.id),
