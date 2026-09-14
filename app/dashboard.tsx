@@ -179,58 +179,6 @@ function followUpKey(application: Application) {
   return `${application.id}:${application.nextActionDate ?? ""}`;
 }
 
-const focusStopWords = new Set(["bewerbung", "bewerbungen", "initiativbewerbung", "fuer", "eine", "einer", "einem", "der", "die", "das", "den", "dem", "des", "im", "in", "an", "bei", "und", "als", "mwd"]);
-
-function focusTokens(value: string) {
-  return new Set(value.normalize("NFKC").toLocaleLowerCase("de-DE").replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss").match(/[a-z0-9]{4,}/g)?.filter((token) => !focusStopWords.has(token)) ?? []);
-}
-
-function focusSimilarity(a: string, b: string) {
-  const left = focusTokens(a);
-  const right = focusTokens(b);
-  if (!left.size || !right.size) return 0;
-  let shared = 0;
-  left.forEach((token) => { if (right.has(token)) shared += 1; });
-  return shared / Math.min(left.size, right.size);
-}
-
-function focusCompany(value: string) {
-  return value.normalize("NFKC").toLocaleLowerCase("de-DE").replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss").replace(/[^a-z0-9]/g, "").replace(/niedersachsen|deutschland|gmbh|ggmbh|gesellschaft|ev/g, "");
-}
-
-function importedSubject(item: Application) {
-  return item.notes?.match(/E-posta konusu:\s*(.+)$/i)?.[1] ?? "";
-}
-
-function isImportedReply(item: Application) {
-  return item.source === "Gmail / Gesendete E-Mails" && /^(?:(?:re|aw|wg|fwd|fw|antwort)\s*:\s*)+/i.test(importedSubject(item));
-}
-
-function sameFocusApplication(a: Application, b: Application) {
-  const aReference = `${a.role} ${a.notes || ""}`.match(/\b\d{4,}-\d{2}\b/)?.[0];
-  const bReference = `${b.role} ${b.notes || ""}`.match(/\b\d{4,}-\d{2}\b/)?.[0];
-  if (aReference && bReference && aReference === bReference) return true;
-  const aEmail = a.contactEmail?.trim().toLowerCase();
-  const bEmail = b.contactEmail?.trim().toLowerCase();
-  if (aEmail && bEmail && aEmail === bEmail && focusSimilarity(a.role, b.role) >= 0.65) return true;
-  const aCompany = focusCompany(a.company);
-  const bCompany = focusCompany(b.company);
-  const sameCompany = aCompany === bCompany || (aCompany.length >= 6 && bCompany.length >= 6 && (aCompany.includes(bCompany) || bCompany.includes(aCompany)));
-  return sameCompany && focusSimilarity(a.role, b.role) >= 0.65;
-}
-
-function canonicalRank(item: Application) {
-  const imported = item.source === "Gmail / Gesendete E-Mails" && item.notes?.startsWith("Gmail'den otomatik aktarıldı.");
-  const completeness = [item.url, item.contactEmail, item.contactName, item.feedback, item.notes].filter(Boolean).length;
-  return (imported ? 100 : 0) - completeness;
-}
-
-function purposeFor(item: Application, language: Language) {
-  if (item.track === "cyber") return language === "de" ? "Einstieg und Weiterentwicklung in IT & Cybersecurity" : "IT ve siber güvenlik alanında ilerleme";
-  if (item.track === "teaching") return item.location?.toLocaleLowerCase("de-DE").includes("gifhorn") ? (language === "de" ? "Schul- und Schülerbegleitung in Gifhorn" : "Gifhorn’da okul ve öğrenci desteği") : (language === "de" ? "Pädagogische Unterstützung und Arbeit mit Schülern" : "Eğitim ve öğrenci desteği");
-  return language === "de" ? "Passende berufliche Möglichkeit prüfen" : "Uygun iş fırsatını değerlendirme";
-}
-
 export function Dashboard({ applications: allApplications, tasks, today, career }: DashboardProps) {
   const [language, setLanguage] = useState<Language>("tr");
   const applications = allApplications.filter(item => !item.deletedAt).map(item => {
@@ -241,7 +189,7 @@ export function Dashboard({ applications: allApplications, tasks, today, career 
     if (!a.appliedOn && !b.appliedOn) return 0;
     if (!a.appliedOn) return 1;
     if (!b.appliedOn) return -1;
-    return b.appliedOn.localeCompare(a.appliedOn);
+    return b.appliedOn.localeCompare(a.appliedOn) || b.id - a.id;
   });
   const trash = allApplications.filter(item => item.deletedAt && !career.merges.some(m=>m.sourceId===item.id));
   const [customerNumber,setCustomerNumber]=useState("");
@@ -256,33 +204,20 @@ export function Dashboard({ applications: allApplications, tasks, today, career 
   const [saving, setSaving] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfError, setPdfError] = useState("");
-  const [listMode, setListMode] = useState<"focus" | "all">("focus");
   const { dismissed, dismiss, dismissAll, restoreAll } = useDismissedFollowUps();
   const t = copy[language];
   const statuses = statusForLanguage(language);
   const locale = language === "de" ? "de-DE" : "tr-TR";
   const todayLabel = new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date(`${today}T12:00:00`));
   const openStatuses = new Set(["saved", "preparing", "applied", "interview"]);
-  const focusCandidates = applications.filter((item) => !isImportedReply(item));
-  const focusCanonical = focusCandidates.filter((item, index, all) => !all.some((other, otherIndex) => otherIndex !== index && sameFocusApplication(other, item) && canonicalRank(other) < canonicalRank(item)));
-  const focusApplications = focusCanonical
-    .filter((item) => !["rejected", "withdrawn"].includes(item.status))
-    .sort((a, b) => {
-      if (a.score !== b.score) return b.score - a.score;
-      const aNext = a.nextActionDate || "9999-12-31";
-      const bNext = b.nextActionDate || "9999-12-31";
-      if (aNext !== bNext) return aNext.localeCompare(bNext);
-      return (b.appliedOn || "").localeCompare(a.appliedOn || "");
-    });
-  const listApplications = listMode === "focus" ? focusApplications : applications;
-  const active = focusApplications.filter((item) => openStatuses.has(item.status));
-  const awaiting = focusApplications.filter((item) => ["applied", "interview"].includes(item.status));
-  const inMotion = focusApplications.filter((item) => ["interview", "offer"].includes(item.status));
-  const followUps = focusApplications.filter((item) => item.nextActionDate && item.nextActionDate <= today && openStatuses.has(item.status) && !dismissed.has(followUpKey(item)));
+  const active = applications.filter((item) => openStatuses.has(item.status));
+  const awaiting = applications.filter((item) => ["applied", "interview"].includes(item.status));
+  const inMotion = applications.filter((item) => ["interview", "offer"].includes(item.status));
+  const followUps = applications.filter((item) => item.nextActionDate && item.nextActionDate <= today && openStatuses.has(item.status) && !dismissed.has(followUpKey(item)));
   const completedTasks = tasks.filter((task) => task.done).length;
-  const avgScore = focusApplications.length ? Math.round(focusApplications.reduce((sum, item) => sum + item.score, 0) / focusApplications.length) : 0;
+  const avgScore = applications.length ? Math.round(applications.reduce((sum, item) => sum + item.score, 0) / applications.length) : 0;
   const priority = followUps[0] ?? [...active].sort((a, b) => b.score - a.score)[0];
-  const recentUpdates = focusApplications.flatMap((application) => application.updates.map((update) => ({ ...update, applicationName: application.company, applicationId: application.id }))).sort((a, b) => b.happenedOn.localeCompare(a.happenedOn)).slice(0, 5);
+  const recentUpdates = applications.flatMap((application) => application.updates.map((update) => ({ ...update, applicationName: application.company, applicationId: application.id }))).sort((a, b) => b.happenedOn.localeCompare(a.happenedOn)).slice(0, 5);
 
   useEffect(() => {
     document.documentElement.lang = language;
@@ -290,7 +225,7 @@ export function Dashboard({ applications: allApplications, tasks, today, career 
   }, [language]);
 
   const changeLanguage = (next: Language) => setLanguage(next);
-  const filtered = listApplications.filter(item => (!query || normalize([item.company,item.role,item.location].join(" ")).includes(normalize(query))) && (!filterStatus || item.status === filterStatus) && (!filterTrack || item.track === filterTrack) && (!dateFrom || !!item.appliedOn && item.appliedOn >= dateFrom) && (!dateTo || !!item.appliedOn && item.appliedOn <= dateTo));
+  const filtered = applications.filter(item => (!query || normalize([item.company,item.role,item.location].join(" ")).includes(normalize(query))) && (!filterStatus || item.status === filterStatus) && (!filterTrack || item.track === filterTrack) && (!dateFrom || !!item.appliedOn && item.appliedOn >= dateFrom) && (!dateTo || !!item.appliedOn && item.appliedOn <= dateTo));
   const invalidRange = !!dateFrom && !!dateTo && dateFrom > dateTo;
   const exportBackup = () => {
     const url = URL.createObjectURL(new Blob([JSON.stringify({schemaVersion:1, exportedAt:new Date().toISOString(), applications:allApplications,tasks,career},null,2)],{type:"application/json"}));
@@ -315,7 +250,7 @@ export function Dashboard({ applications: allApplications, tasks, today, career 
         if (!a.appliedOn && !b.appliedOn) return 0;
         if (!a.appliedOn) return 1;
         if (!b.appliedOn) return -1;
-        return b.appliedOn.localeCompare(a.appliedOn);
+        return b.appliedOn.localeCompare(a.appliedOn) || b.id - a.id;
       }).map(item => ({
         company: item.company, role: item.role, location: item.location || "",
         date: item.appliedOn ? new Intl.DateTimeFormat(locale).format(new Date(`${item.appliedOn}T12:00:00`)) : t.noDate,
@@ -385,7 +320,7 @@ export function Dashboard({ applications: allApplications, tasks, today, career 
           </header>
 
           {pdfError && <p role="alert" className="pdf-error">{pdfError}</p>}
-          <div className="file-toolbar" id="takip"><div className="toolbar-title"><span className="folder-tab">A</span><strong>{t.openFiles}</strong><b>{applications.length}</b></div><div className="toolbar-stats"><span><strong>{active.length}</strong> {t.open}</span><span><strong>{awaiting.length}</strong> {t.awaiting}</span><span><strong>{inMotion.length}</strong> {t.advanced}</span><span className={followUps.length ? "is-alert" : ""}><strong>{followUps.length}</strong> {t.due}</span><span><strong>%{avgScore}</strong> {t.averageMatch}</span></div><span className="toolbar-date">{todayLabel}</span>{dismissed.size > 0 && <button className="restore-alerts" type="button" onClick={restoreAll}>{t.restoreDismissed}</button>}</div>
+          <div className="file-toolbar" id="takip"><div className="toolbar-title"><span className="folder-tab">A</span><strong>{language === "de" ? "Alle Bewerbungen" : "Tüm başvurular"}</strong><b>{applications.length}</b></div><div className="toolbar-stats"><span><strong>{active.length}</strong> {t.open}</span><span><strong>{awaiting.length}</strong> {t.awaiting}</span><span><strong>{inMotion.length}</strong> {t.advanced}</span><span className={followUps.length ? "is-alert" : ""}><strong>{followUps.length}</strong> {t.due}</span><span><strong>%{avgScore}</strong> {t.averageMatch}</span></div><span className="toolbar-date">{todayLabel}</span>{dismissed.size > 0 && <button className="restore-alerts" type="button" onClick={restoreAll}>{t.restoreDismissed}</button>}</div>
 
           <section className="record-controls" aria-label={language==="de"?"Suche und Bericht":"Arama ve rapor"}>
             <label>{language==="de"?"Arbeitgeber, Stelle oder Ort suchen":"Kurum, pozisyon veya şehir ara"}<input type="search" value={query} onChange={e=>setQuery(e.target.value)} /></label>
@@ -397,15 +332,11 @@ export function Dashboard({ applications: allApplications, tasks, today, career 
             <p role="status">{invalidRange?(language==="de"?"Datumsbereich ungültig.":"Tarih aralığı geçersiz."):`${filtered.length} / ${applications.length}`} · {language==="de"?"Liste und PDF verwenden dieselben Filter. Undatierte Einträge werden bei Datumsfiltern ausgeschlossen.":"Liste ve PDF aynı filtreleri kullanır. Tarih filtresinde tarihsiz kayıtlar dışarıda kalır."}</p>
             <details><summary>{language==="de"?"Papierkorb":"Çöp kutusu"} ({trash.length})</summary>{trash.map(item=><div className="trash-row" key={item.id}><span>{item.company} — {item.role}</span><form action={async data=>{await restoreApplication(data);router.refresh();}}><input type="hidden" name="id" value={item.id}/><button type="submit">{language==="de"?"Wiederherstellen":"Geri yükle"}</button></form></div>)}{!trash.length&&<p>{language==="de"?"Papierkorb ist leer.":"Çöp kutusu boş."}</p>}</details>
           </section>
-          <section className="focus-board" aria-label={language === "de" ? "Fokusansicht" : "Odak görünümü"}>
-            <div className="focus-board-head"><div><p className="eyebrow"><span className="eyebrow-line" /> {language === "de" ? "FOKUSANSICHT" : "ODAK GÖRÜNÜMÜ"}</p><h2>{language === "de" ? "Worauf konzentrieren wir uns jetzt?" : "Şimdi nereye odaklanıyoruz?"}</h2><p>{language === "de" ? "Doppelte Gmail-Einträge und abgeschlossene Bewerbungen bleiben erhalten; hier stehen aktive, eindeutige Vorgänge im Vordergrund." : "Mükerrer Gmail kayıtları ve kapanmış başvurular saklı kalır; burada aktif ve benzersiz dosyalar öne çıkar."}</p></div><div className="focus-switch" role="tablist" aria-label={language === "de" ? "Listenansicht" : "Liste görünümü"}><button type="button" role="tab" aria-selected={listMode === "focus"} className={listMode === "focus" ? "selected" : ""} onClick={() => setListMode("focus")}>{language === "de" ? "Fokus" : "Odak"} <b>{focusApplications.length}</b></button><button type="button" role="tab" aria-selected={listMode === "all"} className={listMode === "all" ? "selected" : ""} onClick={() => setListMode("all")}>{language === "de" ? "Alle Einträge" : "Tüm kayıtlar"} <b>{applications.length}</b></button></div></div>
-            <div className="focus-grid">{focusApplications.slice(0, 5).map((item) => <article className="focus-card" key={item.id}><div className="focus-card-top"><span className={`track-tag ${item.track}`}>{trackLabels[language][item.track] || trackLabels[language].other}</span><span className={`status-pill ${item.status}`}><i />{statuses[item.status] || item.status}</span></div><h3>{item.role}</h3><p className="focus-destination"><strong>{language === "de" ? "Ziel" : "Hedef"}:</strong> {item.company} · {item.location || t.noLocation}</p><p className="focus-purpose"><strong>{language === "de" ? "Zweck" : "Amaç"}:</strong> {purposeFor(item, language)}</p><p className="focus-next"><strong>{t.nextStep}:</strong> {localizedContent(item.nextAction, language) || t.noNextAction}<small>{item.nextActionDate ? `${formatDate(item.nextActionDate, language)} · ${relativeDate(item.nextActionDate, today, language)}` : t.noPlan}</small></p><button className="focus-open" type="button" onClick={() => openApplication(item.id)}>{language === "de" ? "Datei öffnen" : "Dosyayı aç"} ↗</button></article>)}</div>
-          </section>
           <section className="career-tools"><details><summary>{language==="de"?"Jobcenter-Berichtsprofil":"Jobcenter rapor profili"}</summary><p>{language==="de"?"Nur für diesen PDF-Download. Kundennummer wird weder gespeichert noch an den Server gesendet. Zeitraum und Status entsprechen den Filtern oben.":"Yalnızca bu PDF çıktısı için. Müşteri numarası kaydedilmez ve sunucuya gönderilmez. Dönem ve durum yukarıdaki filtrelerden alınır."}</p><label>{language==="de"?"Kundennummer (optional)":"Müşteri numarası (isteğe bağlı)"}<input maxLength={40} autoComplete="off" value={customerNumber} onChange={e=>setCustomerNumber(e.target.value)}/></label><label className="confirm-check"><input type="checkbox" checked={signature} onChange={e=>setSignature(e.target.checked)}/>{language==="de"?"Unterschriftsfeld im PDF":"PDF'ye imza alanı ekle"}</label></details></section>
           <CareerTools key={language} applications={allApplications.map(a=>applications.find(item=>item.id===a.id)||a)} career={career} language={language} today={today}/>
           <div className="file-layout">
             <section className="file-list" id="basvurular" aria-label={language === "de" ? "Bewerbungsverfolgung" : "Başvuru takibi"}>
-              <div className="list-intro"><div><p className="eyebrow"><span className="eyebrow-line" /> {t.records}</p><h2>{t.applications}</h2></div><span className="list-note">{t.clickToOpen}</span></div>
+              <div className="list-intro"><div><p className="eyebrow"><span className="eyebrow-line" /> {t.records}</p><h2>{t.applications}</h2></div><span className="list-note">{t.clickToOpen} · {language === "de" ? "Vom neuesten zum ältesten Eintrag sortiert" : "En yeni başvurudan en eskiye sıralı"}</span></div>
               {followUps.length > 0 && <section className="follow-up-alerts" aria-live="polite" aria-labelledby="follow-up-alert-heading"><div className="follow-up-alert-head"><div><p className="eyebrow"><span className="eyebrow-line" /> {t.followUpAlerts}</p><h3 id="follow-up-alert-heading">{t.followUpHint}</h3></div><button className="alert-dismiss-all" type="button" onClick={() => dismissAll(followUps.map(followUpKey))}>{t.dismissAll}</button></div><div className="follow-up-alert-list">{followUps.map((item) => <article className="follow-up-alert" key={followUpKey(item)}><div className="follow-up-alert-copy"><strong>{item.company}</strong><span>{localizedContent(item.nextAction, language) || t.noNextAction}</span><small>{item.nextActionDate ? formatDate(item.nextActionDate, language, true) : t.noDate}</small></div><div className="follow-up-alert-actions"><button className="alert-open" type="button" onClick={() => openApplication(item.id)}>{t.viewFile}</button><button className="alert-dismiss" type="button" onClick={() => dismiss(followUpKey(item))}>{t.dismiss}</button></div></article>)}</div></section>}
               <div className="list-head"><span>{t.number}</span><span></span><span>{t.jobCompany}</span><span>{t.source}</span><span>{t.status}</span><span>{t.followUpColumn}</span><span></span></div>
               {filtered.map((item, index) => {
