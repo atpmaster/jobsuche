@@ -15,7 +15,11 @@ export async function GET(request: Request) {
   auth.searchParams.set("prompt", "consent");
   auth.searchParams.set("scope", "https://www.googleapis.com/auth/gmail.readonly");
   auth.searchParams.set("state", sessionId);
-  const response = Response.redirect(auth.toString(), 302);
-  response.headers.append("Set-Cookie", gmailSessionCookie(sessionId));
-  return response;
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: auth.toString(),
+      "Set-Cookie": gmailSessionCookie(sessionId),
+    },
+  });
 }

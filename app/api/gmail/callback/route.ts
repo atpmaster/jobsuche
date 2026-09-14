@@ -28,7 +28,11 @@ export async function GET(request: Request) {
   await db.prepare("CREATE TABLE IF NOT EXISTS gmail_connections (session_id TEXT PRIMARY KEY, access_token TEXT NOT NULL, refresh_token TEXT, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)").run();
   await db.prepare("INSERT INTO gmail_connections (session_id, access_token, refresh_token) VALUES (?, ?, ?) ON CONFLICT(session_id) DO UPDATE SET access_token=excluded.access_token, refresh_token=COALESCE(excluded.refresh_token, gmail_connections.refresh_token), updated_at=CURRENT_TIMESTAMP")
     .bind(sessionId, tokens.access_token, tokens.refresh_token ?? null).run();
-  const responseRedirect = Response.redirect(url.origin + "/?gmail=connected", 302);
-  responseRedirect.headers.append("Set-Cookie", gmailSessionCookie(sessionId));
-  return responseRedirect;
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: url.origin + "/?gmail=connected",
+      "Set-Cookie": gmailSessionCookie(sessionId),
+    },
+  });
 }
