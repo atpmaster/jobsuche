@@ -90,6 +90,7 @@ const contentTranslations: Record<string, Translation> = {
 };
 
 const fallbackReplacements: Array<[RegExp, string, string]> = [
+  [/^Gmail yanıtı:/g, "Gmail cevabı:", "Gmail-Antwort:"],
   [/Gesendete E-Mails/g, "Gönderilen e-postalar", "Gesendete E-Mails"],
   [/Eingangsbestätigung/g, "Başvuru alındı teyidi", "Eingangsbestätigung"],
   [/Rückmeldung/g, "geri dönüş", "Rückmeldung"],
@@ -109,6 +110,14 @@ const fallbackReplacements: Array<[RegExp, string, string]> = [
   [/E-posta/g, "E-posta", "E-Mail"],
   [/başvuru portalında/g, "başvuru portalında", "im Bewerbungsportal"],
   [/portalda başarıyla gönderildi/g, "portal üzerinden başarıyla gönderildi", "erfolgreich über das Portal gesendet"],
+  [/geri dönüş/g, "geri dönüş", "Rückmeldung"],
+  [/steht aus/g, "bekleniyor", "steht aus"],
+  [/Bewerbung für/g, "başvuru için", "Bewerbung für"],
+  [/Stellennummer/g, "ilan numarası", "Stellennummer"],
+  [/gesendet/g, "gönderildi", "gesendet"],
+  [/EIS-Bewerbungsbogen/g, "EIS başvuru formu", "EIS-Bewerbungsbogen"],
+  [/sowie die aktualisierten Unterlagen wurden am/g, "ve güncellenmiş belgeler tarihinde", "sowie die aktualisierten Unterlagen wurden am"],
+  [/nachgereicht/g, "sonradan gönderildi", "nachgereicht"],
   [/anfordern/g, "iste", "anfordern"],
   [/nachfassen/g, "takip et", "nachfassen"],
   [/Fehlende Bewerbungsunterlagen nachreichen/g, "Eksik başvuru belgelerini sonradan gönder", "Fehlende Bewerbungsunterlagen nachreichen"],
@@ -129,6 +138,11 @@ export function localizedSource(value: string | null | undefined, language: Lang
 
 export function localizedContent(value: string | null | undefined, language: Language) {
   if (!value) return value;
+  if (value.includes("Stellennummer 18049-26") && value.includes("geri dönüş steht aus")) {
+    return language === "de"
+      ? "Bewerbung für Stellennummer 18049-26 gesendet. EIS-Bewerbungsbogen sowie die aktualisierten Unterlagen wurden am 11.09.2026 nachgereicht; Rückmeldung steht aus."
+      : "18049-26 ilan numarası için başvuru gönderildi. EIS başvuru formu ve güncellenmiş belgeler 11.09.2026 tarihinde sonradan gönderildi; geri dönüş bekleniyor.";
+  }
   const statusTitle = value.match(/^Durum: (new|listed|sent|waiting|received|saved|preparing|applied|interview|offer|rejected|withdrawn)$/);
   if (statusTitle) return `${language === "de" ? "Status" : "Durum"}: ${statusLabels[language][statusTitle[1]]}`;
   const statusBody = value.match(/^Başvuru durumu (new|listed|sent|waiting|received|saved|preparing|applied|interview|offer|rejected|withdrawn) olarak güncellendi\.$/);
