@@ -36,3 +36,18 @@ export const gmailSyncState = sqliteTable("gmail_sync_state", {
   lastError: text("last_error"),
   messagesImported: integer("messages_imported").notNull().default(0),
 });
+
+export const gmailConnections = sqliteTable("gmail_connections", {
+  sessionId: text("session_id").primaryKey(),
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token"),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const gmailSyncStates = sqliteTable("gmail_sync_states", {
+  sessionId: text("session_id").primaryKey(),
+  lastSyncAt: text("last_sync_at"),
+  lastAttemptAt: text("last_attempt_at"),
+  lastError: text("last_error"),
+  messagesImported: integer("messages_imported").notNull().default(0),
+});

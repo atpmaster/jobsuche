@@ -26,7 +26,7 @@ type GmailMessage = {
   payload?: GmailPart & { headers?: GmailHeader[] };
 };
 type GmailListResponse = { messages?: Array<{ id: string }>; nextPageToken?: string };
-type TokenState = { accessToken: string; refreshToken: string | null };
+type TokenState = { accessToken: string; refreshToken: string | null; sessionId: string };
 
 const APPLICATION_SUBJECT_WORDS = /bewerb|initiativ|schulbegleit|it[- ]?support|service[- ]?desk|cyber|security|trainee|lehrkraft|mathematik|pädagog|erzieher/i;
 const APPLICATION_BODY_WORDS = /hiermit\s+bewerbe|bewerbungsunterlagen|lebenslauf|anschreiben|für\s+die\s+(?:ausgeschriebene|offene)\s+stelle/i;
@@ -200,7 +200,7 @@ async function refreshAccessToken(db: Database, state: TokenState) {
   const result = await response.json() as { access_token?: string };
   if (!result.access_token) throw new Error("GMAIL_REFRESH_EMPTY");
   state.accessToken = result.access_token;
-  await db.prepare("UPDATE gmail_connection SET access_token = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1").bind(state.accessToken).run();
+  await db.prepare("UPDATE gmail_connections SET access_token = ?, updated_at = CURRENT_TIMESTAMP WHERE session_id = ?").bind(state.accessToken, state.sessionId).run();
 }
 
 async function gmailJson<T>(db: Database, state: TokenState, url: string): Promise<T> {
@@ -291,29 +291,30 @@ async function importReplies(db: Database, state: TokenState, ids: string[], app
   return updates;
 }
 
-export async function syncGmailApplications(db: Database) {
+export async function syncGmailApplications(db: Database, sessionId: string | null) {
+  if (!sessionId) return { connected: false, imported: 0, updates: 0 };
   try {
-    const connection = await db.prepare("SELECT access_token AS accessToken, refresh_token AS refreshToken FROM gmail_connection WHERE id = 1").first<{ accessToken: string; refreshToken: string | null }>();
+    const connection = await db.prepare("SELECT access_token AS accessToken, refresh_token AS refreshToken FROM gmail_connections WHERE session_id = ?").bind(sessionId).first<{ accessToken: string; refreshToken: string | null }>();
     if (!connection?.accessToken) return { connected: false, imported: 0, updates: 0 };
-    await db.prepare("INSERT OR IGNORE INTO gmail_sync_state (id) VALUES (1)").run();
-    const claimed = await db.prepare(`UPDATE gmail_sync_state SET last_attempt_at = CURRENT_TIMESTAMP
-      WHERE id = 1 AND (last_attempt_at IS NULL OR last_attempt_at <= datetime('now', '-45 seconds'))`).run();
+    await db.prepare("INSERT OR IGNORE INTO gmail_sync_states (session_id) VALUES (?)").bind(sessionId).run();
+    const claimed = await db.prepare(`UPDATE gmail_sync_states SET last_attempt_at = CURRENT_TIMESTAMP
+      WHERE session_id = ? AND (last_attempt_at IS NULL OR last_attempt_at <= datetime('now', '-45 seconds'))`).bind(sessionId).run();
     if (!claimed.meta.changes) return { connected: true, imported: 0, updates: 0 };
 
-    const state: TokenState = { accessToken: connection.accessToken, refreshToken: connection.refreshToken };
+    const state: TokenState = { accessToken: connection.accessToken, refreshToken: connection.refreshToken, sessionId };
     const appsResult = await db.prepare("SELECT id, company, role, notes, contact_email AS contactEmail, gmail_message_id AS gmailMessageId FROM applications WHERE deleted_at IS NULL").all<StoredApplication>();
     const apps = appsResult.results;
     const sentIds = await listMessages(db, state, "in:sent newer_than:180d");
     const imported = await importSentMessages(db, state, sentIds, apps);
     const inboxIds = await listMessages(db, state, "in:inbox -from:me newer_than:180d");
     const updates = await importReplies(db, state, inboxIds, apps);
-    await db.prepare("UPDATE gmail_sync_state SET last_sync_at = CURRENT_TIMESTAMP, last_error = NULL, messages_imported = ? WHERE id = 1").bind(imported + updates).run();
+    await db.prepare("UPDATE gmail_sync_states SET last_sync_at = CURRENT_TIMESTAMP, last_error = NULL, messages_imported = ? WHERE session_id = ?").bind(imported + updates, sessionId).run();
     return { connected: true, imported, updates };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await db.prepare("CREATE TABLE IF NOT EXISTS gmail_sync_state (id INTEGER PRIMARY KEY, last_sync_at TEXT, last_attempt_at TEXT, last_error TEXT, messages_imported INTEGER NOT NULL DEFAULT 0)").run();
-    await db.prepare("UPDATE gmail_sync_state SET last_error = ? WHERE id = 1").bind(message.slice(0, 250)).run();
+    await db.prepare("CREATE TABLE IF NOT EXISTS gmail_sync_states (session_id TEXT PRIMARY KEY, last_sync_at TEXT, last_attempt_at TEXT, last_error TEXT, messages_imported INTEGER NOT NULL DEFAULT 0)").run();
+    await db.prepare("UPDATE gmail_sync_states SET last_error = ? WHERE session_id = ?").bind(message.slice(0, 250), sessionId).run();
     console.error("[gmail-sync] synchronization failed", message);
-    return { connected: true, imported: 0, updates: 0, error: message };
+    return { connected: false, imported: 0, updates: 0, error: message };
   }
 }

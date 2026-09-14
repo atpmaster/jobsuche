@@ -29,6 +29,13 @@
       "when": 1789378205644,
       "tag": "0003_flippant_dormammu",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1789398231153,
+      "tag": "0004_lucky_quentin_quire",
+      "breakpoints": true
     }
   ]
 }
