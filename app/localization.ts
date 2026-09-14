@@ -44,6 +44,7 @@ const sourceTranslations: Record<string, Translation> = {
   "başvuru yönetimi.net": { tr: "başvuru yönetimi.net", de: "Bewerbermanagement.net" },
   "E-Mail": { tr: "E-posta", de: "E-Mail" },
   "E-posta": { tr: "E-posta", de: "E-Mail" },
+  "Başvuru yönetimi": { tr: "Başvuru yönetimi", de: "Bewerbermanagement" },
   "Bewerbermanagement": { tr: "Başvuru yönetimi", de: "Bewerbermanagement" },
   "Karriereportal": { tr: "Kariyer portalı", de: "Karriereportal" },
 };
@@ -99,6 +100,7 @@ const fallbackReplacements: Array<[RegExp, string, string]> = [
   [/Karriereportal/g, "kariyer portalı", "Karriereportal"],
   [/Bewerbermanagement/g, "başvuru yönetimi", "Bewerbermanagement"],
   [/başvuru yönetimi/g, "başvuru yönetimi", "Bewerbermanagement"],
+  [/Başvuru yönetimi/g, "Başvuru yönetimi", "Bewerbermanagement"],
   [/Gönderilen e-postalar/g, "Gönderilen e-postalar", "Gesendete E-Mails"],
   [/İş Ajansı/g, "İş Ajansı", "Arbeitsagentur"],
   [/Gifhorn ilçesi/g, "Gifhorn ilçesi", "Landkreis Gifhorn"],
@@ -118,6 +120,8 @@ const fallbackReplacements: Array<[RegExp, string, string]> = [
   [/EIS-Bewerbungsbogen/g, "EIS başvuru formu", "EIS-Bewerbungsbogen"],
   [/sowie die aktualisierten Unterlagen wurden am/g, "ve güncellenmiş belgeler tarihinde", "sowie die aktualisierten Unterlagen wurden am"],
   [/nachgereicht/g, "sonradan gönderildi", "nachgereicht"],
+  [/Antwort:/g, "Yanıt:", "Antwort:"],
+  [/şirketinde/g, "şirketinde", "bei"],
   [/anfordern/g, "iste", "anfordern"],
   [/nachfassen/g, "takip et", "nachfassen"],
   [/Fehlende Bewerbungsunterlagen nachreichen/g, "Eksik başvuru belgelerini sonradan gönder", "Fehlende Bewerbungsunterlagen nachreichen"],
@@ -138,7 +142,7 @@ export function localizedSource(value: string | null | undefined, language: Lang
 
 export function localizedContent(value: string | null | undefined, language: Language) {
   if (!value) return value;
-  if (value.includes("Stellennummer 18049-26") && value.includes("geri dönüş steht aus")) {
+  if (value.includes("Stellennummer 18049-26")) {
     return language === "de"
       ? "Bewerbung für Stellennummer 18049-26 gesendet. EIS-Bewerbungsbogen sowie die aktualisierten Unterlagen wurden am 11.09.2026 nachgereicht; Rückmeldung steht aus."
       : "18049-26 ilan numarası için başvuru gönderildi. EIS başvuru formu ve güncellenmiş belgeler 11.09.2026 tarihinde sonradan gönderildi; geri dönüş bekleniyor.";
