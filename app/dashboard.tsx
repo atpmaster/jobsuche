@@ -262,7 +262,7 @@ export function Dashboard({ applications: allApplications, tasks, today, career 
       // Chrome on some Windows installations can fail its post-download virus scan
       // for client-generated Blob downloads. Show the valid PDF in an embedded
       // viewer instead, so Chrome never has to scan a forced download.
-      const pdfUrl = doc.output("bloburl");
+      const pdfUrl = doc.output("datauristring");
       const viewer = document.createElement("div");
       viewer.setAttribute("role", "dialog");
       viewer.setAttribute("aria-modal", "true");
@@ -278,7 +278,6 @@ export function Dashboard({ applications: allApplications, tasks, today, career 
       closeButton.style.cssText = "border:1px solid #91a4bb;border-radius:8px;background:#fff;color:#18202b;padding:7px 12px;cursor:pointer;font:600 14px system-ui,sans-serif;";
       const closeViewer = () => {
         viewer.remove();
-        URL.revokeObjectURL(pdfUrl);
       };
       closeButton.addEventListener("click", closeViewer);
       toolbar.appendChild(label);
