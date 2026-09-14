@@ -293,15 +293,14 @@ async function importReplies(db: Database, state: TokenState, ids: string[], app
 }
 
 export async function syncGmailApplications(db: Database) {
-  const connection = await db.prepare("SELECT access_token AS accessToken, refresh_token AS refreshToken FROM gmail_connection WHERE id = 1").first<{ accessToken: string; refreshToken: string | null }>();
-  if (!connection?.accessToken) return { connected: false, imported: 0, updates: 0 };
-
-  await db.prepare("INSERT OR IGNORE INTO gmail_sync_state (id) VALUES (1)").run();
-  const claimed = await db.prepare(`UPDATE gmail_sync_state SET last_attempt_at = CURRENT_TIMESTAMP
-    WHERE id = 1 AND (last_attempt_at IS NULL OR last_attempt_at <= datetime('now', '-45 seconds'))`).run();
-  if (!claimed.meta.changes) return { connected: true, imported: 0, updates: 0 };
-
   try {
+    const connection = await db.prepare("SELECT access_token AS accessToken, refresh_token AS refreshToken FROM gmail_connection WHERE id = 1").first<{ accessToken: string; refreshToken: string | null }>();
+    if (!connection?.accessToken) return { connected: false, imported: 0, updates: 0 };
+    await db.prepare("INSERT OR IGNORE INTO gmail_sync_state (id) VALUES (1)").run();
+    const claimed = await db.prepare(`UPDATE gmail_sync_state SET last_attempt_at = CURRENT_TIMESTAMP
+      WHERE id = 1 AND (last_attempt_at IS NULL OR last_attempt_at <= datetime('now', '-45 seconds'))`).run();
+    if (!claimed.meta.changes) return { connected: true, imported: 0, updates: 0 };
+
     const state: TokenState = { accessToken: connection.accessToken, refreshToken: connection.refreshToken };
     const appsResult = await db.prepare("SELECT id, company, role, notes, contact_email AS contactEmail, gmail_message_id AS gmailMessageId FROM applications WHERE deleted_at IS NULL").all<StoredApplication>();
     const apps = appsResult.results;
@@ -313,6 +312,7 @@ export async function syncGmailApplications(db: Database) {
     return { connected: true, imported, updates };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    await db.prepare("CREATE TABLE IF NOT EXISTS gmail_sync_state (id INTEGER PRIMARY KEY, last_sync_at TEXT, last_attempt_at TEXT, last_error TEXT, messages_imported INTEGER NOT NULL DEFAULT 0)").run();
     await db.prepare("UPDATE gmail_sync_state SET last_error = ? WHERE id = 1").bind(message.slice(0, 250)).run();
     console.error("[gmail-sync] synchronization failed", message);
     return { connected: true, imported: 0, updates: 0, error: message };
