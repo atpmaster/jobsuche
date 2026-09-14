@@ -31,6 +31,7 @@ type TokenState = { accessToken: string; refreshToken: string | null };
 const APPLICATION_SUBJECT_WORDS = /bewerb|initiativ|schulbegleit|it[- ]?support|service[- ]?desk|cyber|security|trainee|lehrkraft|mathematik|pädagog|erzieher/i;
 const APPLICATION_BODY_WORDS = /hiermit\s+bewerbe|bewerbungsunterlagen|lebenslauf|anschreiben|für\s+die\s+(?:ausgeschriebene|offene)\s+stelle/i;
 const NOT_APPLICATION_WORDS = /jobcenter|arbeitsagentur|agentur\s+für\s+arbeit|kundennummer/i;
+const REPLY_FORWARD_SUBJECT = /^(?:(?:re|aw|wg|fwd|fw|antwort)\s*:\s*)+/i;
 const REJECTION_WORDS = /leider|absage|nicht\s+berücksichtigt|nicht\s+berücksichtigen|anderweitig\s+vergeben|stellenbesetzung|keine\s+einstellung/i;
 const INTERVIEW_WORDS = /vorstellungsgespräch|kennenlernen|interview|gespräch|telefonisch|termin/i;
 const OFFER_WORDS = /angebot|einstellung|arbeitsvertrag|willkommen|wir\s+freuen\s+uns,?\s+sie/i;
@@ -114,9 +115,11 @@ function parseApplication(message: GmailMessage) {
   const to = getHeader(message, "To");
   const recipientEmail = extractEmail(to);
   const body = messageText(message);
+  // A reply or forwarded message is evidence about an existing application,
+  // not a new application. Importing these as new rows creates duplicates.
+  if (REPLY_FORWARD_SUBJECT.test(subject)) return null;
   const subjectIsRelevant = APPLICATION_SUBJECT_WORDS.test(subject);
-  const bodyIsRelevant = APPLICATION_BODY_WORDS.test(body);
-  if (!subjectIsRelevant && !bodyIsRelevant) return null;
+  if (!subjectIsRelevant) return null;
   if (NOT_APPLICATION_WORDS.test(subject) && !/bewerb|bewerbe/i.test(subject)) return null;
 
   const clean = cleanSubject(subject);
@@ -244,7 +247,7 @@ async function importSentMessages(db: Database, state: TokenState, ids: string[]
     const message = await getMessage(db, state, id);
     const candidate = parseApplication(message);
     if (!candidate || !likelyApplicationSubject(candidate.subject, candidate.body)) continue;
-    const duplicate = apps.find((application) => isDuplicate(application, { company: candidate.company, role: candidate.role, notes: candidate.subject }));
+    const duplicate = apps.find((application) => isDuplicate(application, { company: candidate.company, role: candidate.role, notes: candidate.subject, contactEmail: candidate.contactEmail }));
     if (duplicate) {
       if (!duplicate.gmailMessageId) await db.prepare("UPDATE applications SET gmail_message_id = ? WHERE id = ?").bind(id, duplicate.id).run();
       duplicate.gmailMessageId = id;
