@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   if (!tokens.access_token) return new Response("Gmail erişim anahtarı alınamadı.", { status: 502 });
   const db = env.DB;
   await db.prepare("CREATE TABLE IF NOT EXISTS gmail_connections (session_id TEXT PRIMARY KEY, access_token TEXT NOT NULL, refresh_token TEXT, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)").run();
-  await db.prepare("INSERT INTO gmail_connections (session_id, access_token, refresh_token) VALUES (?, ?, ?) ON CONFLICT(session_id) DO UPDATE SET access_token=excluded.access_token, refresh_token=COALESCE(excluded.refresh_token, gmail_connections.refresh_token), updated_at=CURRENT_TIMESTAMP")
+  await db.prepare("INSERT INTO gmail_connections (session_id, access_token, refresh_token) VALUES (?, ?, ?) ON CONFLICT(session_id) DO UPDATE SET access_token=excluded.access_token, refresh_token=excluded.refresh_token, updated_at=CURRENT_TIMESTAMP")
     .bind(sessionId, tokens.access_token, tokens.refresh_token ?? null).run();
   return new Response(null, {
     status: 302,

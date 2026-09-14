@@ -16,3 +16,7 @@ export function newGmailSessionId() {
 export function gmailSessionCookie(sessionId: string) {
   return `${GMAIL_SESSION_COOKIE}=${sessionId}; Path=/; Max-Age=31536000; HttpOnly; Secure; SameSite=Lax`;
 }
+
+export function clearGmailSessionCookie() {
+  return `${GMAIL_SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`;
+}
