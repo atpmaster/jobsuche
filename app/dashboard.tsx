@@ -215,7 +215,6 @@ export function Dashboard({ applications: allApplications, tasks, today, career,
   };
   const printReport = async () => {
     setPdfBusy(true); setPdfError("");
-    const viewer = window.open("about:blank", "_blank");
     try {
       const { buildReport } = await import("./report");
       if (invalidRange || !reportApplications.length) throw new Error("EMPTY_REPORT");
@@ -234,29 +233,72 @@ export function Dashboard({ applications: allApplications, tasks, today, career,
       const reportScope=[language==="de"?"Zeitraum: ":"Dönem: ",period,filterStatus?statuses[filterStatus]:t.all].join(" ");
       const doc = await buildReport(rows, language, formatDate(today, language, true), undefined, {customerNumber,signature,period:reportScope});
       const fileName = language === "de" ? `Ahmet-Tepe-Bewerbungsnachweis-${today}.pdf` : `Ahmet-Tepe-Basvuru-Takip-${today}.pdf`;
-      // Chrome on some Windows installations can fail its post-download virus scan
-      // Chrome on some Windows installations can fail its post-download virus scan
-      // for client-generated Blob downloads. Open the valid PDF in a tab that was
-      // created directly by the user's click, so no forced download is performed.
       const pdfBlob = doc.output("blob") as Blob;
       const pdfUrl = URL.createObjectURL(pdfBlob);
-      if (viewer) {
-        // Keep the reliable PDF preview, but also provide a correctly named
-        // download link on the preview page. Chrome otherwise names blob PDFs
-        // with an opaque UUID.
-        viewer.document.open();
-        viewer.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${fileName}</title><style>html,body{margin:0;height:100%;font-family:Arial,sans-serif;background:#f2f4f7}header{height:52px;display:flex;align-items:center;gap:14px;padding:0 18px;background:#172b43;color:#fff;box-sizing:border-box}header strong{font-size:14px}header a{margin-left:auto;color:#fff;background:#1b5db9;border-radius:5px;padding:9px 13px;text-decoration:none;font-size:13px;font-weight:700}iframe{display:block;width:100%;height:calc(100% - 52px);border:0;background:#fff}</style></head><body><header><strong>${language === "de" ? "PDF-Vorschau" : "PDF önizleme"}</strong><span>${fileName}</span><a href="${pdfUrl}" download="${fileName}">${language === "de" ? "PDF herunterladen" : "PDF'yi indir"}</a></header><iframe title="${fileName}" src="${pdfUrl}"></iframe></body></html>`);
-        viewer.document.close();
-        window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 10 * 60 * 1000);
-      } else {
-        const link = document.createElement("a");
-        link.href = pdfUrl;
-        link.download = fileName;
-        link.click();
-        window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60 * 1000);
-      }
+      const overlay = document.createElement("div");
+      overlay.setAttribute("role", "dialog");
+      overlay.setAttribute("aria-modal", "true");
+      overlay.setAttribute("aria-label", language === "de" ? "PDF-Vorschau" : "PDF önizleme");
+      overlay.style.cssText = "position:fixed;inset:0;z-index:1000;display:flex;flex-direction:column;background:#18202b;";
+
+      const toolbar = document.createElement("div");
+      toolbar.style.cssText = "display:flex;align-items:center;gap:12px;padding:10px 16px;color:#fff;font:600 14px system-ui,sans-serif;";
+      const title = document.createElement("strong");
+      title.textContent = language === "de" ? "PDF-Vorschau" : "PDF önizleme";
+      const name = document.createElement("span");
+      name.textContent = fileName;
+      name.style.cssText = "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+      const saveButton = document.createElement("button");
+      saveButton.type = "button";
+      saveButton.textContent = language === "de" ? "PDF speichern" : "PDF'yi kaydet";
+      saveButton.style.cssText = "margin-left:auto;border:0;border-radius:7px;background:#1b5db9;color:#fff;padding:8px 12px;cursor:pointer;font:600 13px system-ui,sans-serif;";
+      const closeButton = document.createElement("button");
+      closeButton.type = "button";
+      closeButton.textContent = language === "de" ? "Schließen" : "Kapat";
+      closeButton.style.cssText = "border:1px solid #91a4bb;border-radius:7px;background:#fff;color:#18202b;padding:7px 12px;cursor:pointer;font:600 13px system-ui,sans-serif;";
+      const status = document.createElement("span");
+      status.setAttribute("role", "status");
+      status.style.cssText = "position:absolute;left:-9999px;";
+      toolbar.append(title, name, saveButton, closeButton, status);
+
+      const frame = document.createElement("iframe");
+      frame.src = pdfUrl;
+      frame.title = fileName;
+      frame.style.cssText = "flex:1;width:100%;border:0;background:#fff;";
+
+      const closeViewer = () => { URL.revokeObjectURL(pdfUrl); overlay.remove(); };
+      closeButton.addEventListener("click", closeViewer);
+      saveButton.addEventListener("click", async () => {
+        saveButton.disabled = true;
+        try {
+          const picker = (window as Window & { showSaveFilePicker?: (options: unknown) => Promise<{ createWritable: () => Promise<{ write: (value: Blob) => Promise<void>; close: () => Promise<void> }> }> }).showSaveFilePicker;
+          if (picker) {
+            const handle = await picker({
+              suggestedName: fileName,
+              types: [{ description: "PDF", accept: { "application/pdf": [".pdf"] } }],
+              excludeAcceptAllOption: false,
+            });
+            const writable = await handle.createWritable();
+            await writable.write(pdfBlob);
+            await writable.close();
+          } else {
+            const link = document.createElement("a");
+            link.href = pdfUrl;
+            link.download = fileName;
+            link.click();
+          }
+          status.textContent = language === "de" ? "PDF gespeichert." : "PDF kaydedildi.";
+        } catch (error) {
+          if (!(error instanceof DOMException && error.name === "AbortError")) {
+            status.textContent = language === "de" ? "PDF konnte nicht gespeichert werden." : "PDF kaydedilemedi.";
+          }
+        } finally {
+          saveButton.disabled = false;
+        }
+      });
+      overlay.append(toolbar, frame);
+      document.body.appendChild(overlay);
     } catch {
-      if (viewer && !viewer.closed) viewer.close();
       setPdfError(language === "de" ? "PDF konnte nicht erstellt werden. Bitte erneut versuchen." : "PDF oluşturulamadı. Lütfen tekrar deneyin.");
     } finally { setPdfBusy(false); }
   };
