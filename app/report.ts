@@ -5,26 +5,33 @@ export type ReportRow = { company: string; role: string; location: string; date:
 export async function buildReport(rows: ReportRow[], language: "tr" | "de", date: string, fonts?: string[], profile?: {customerNumber?:string;signature?:boolean;period?:string}) {
   const de = language === "de";
   const doc = new jsPDF({ orientation: "landscape", format: "a4", compress: true });
-  const fontData = fonts ?? await Promise.all(["Regular", "Bold"].map(async weight => {
-    const response = await fetch(`/fonts/NotoSans-${weight}.ttf`);
-    if (!response.ok) throw new Error("Font unavailable");
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    let binary = "";
-    for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
-    return btoa(binary);
-  }));
-  fontData.forEach((data, index) => {
-    const name = `NotoSans-${index}.ttf`;
-    doc.addFileToVFS(name, data);
-    doc.addFont(name, "NotoSans", index ? "bold" : "normal");
-  });
+  let reportFont = "helvetica";
+  try {
+    const fontData = fonts ?? await Promise.all(["Regular", "Bold"].map(async weight => {
+      const response = await fetch(`/fonts/NotoSans-${weight}.ttf`);
+      if (!response.ok) throw new Error("Font unavailable");
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      let binary = "";
+      for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+      return btoa(binary);
+    }));
+    fontData.forEach((data, index) => {
+      const name = `NotoSans-${index}.ttf`;
+      doc.addFileToVFS(name, data);
+      doc.addFont(name, "NotoSans", index ? "bold" : "normal");
+    });
+    reportFont = "NotoSans";
+  } catch {
+    // Keep the report usable if a browser blocks the optional web-font download.
+    // jsPDF's built-in Helvetica covers German umlauts and still produces a valid PDF.
+  }
   doc.setProperties({ title: de ? "Bewerbungsnachweis - Ahmet Tepe" : "Başvuru Raporu - Ahmet Tepe", author: "Ahmet Tepe" });
   autoTable(doc, {
     startY: profile?.period ? 56 : 48, margin: { top: profile?.period ? 56 : 48, bottom: profile?.signature ? 35 : 20, left: 14, right: 14 },
     head: [[de ? "Nr." : "No", de ? "Datum der\nBewerbung" : "Başvuru tarihi", de ? "Arbeitgeber / Stelle" : "Kurum / pozisyon", de ? "Quelle / Kanal" : "Kaynak / kanal", de ? "Aktueller Stand" : "Güncel durum", de ? "Nächster Schritt" : "Sonraki adım"]],
     body: rows.map((row, index) => [String(index + 1).padStart(2, "0"), row.date, `${row.company}\n${row.role}${row.location ? `\n${row.location}` : ""}`, row.source, row.status, row.next]),
     theme: "plain", showHead: "everyPage", rowPageBreak: "avoid",
-    styles: { font: "NotoSans", fontSize: 9, cellPadding: profile?.period ? 2.2 : 3.2, textColor: [35, 47, 64], lineColor: [222, 228, 235], lineWidth: { bottom: 0.15 }, overflow: "linebreak", valign: "top" },
+    styles: { font: reportFont, fontSize: 9, cellPadding: profile?.period ? 2.2 : 3.2, textColor: [35, 47, 64], lineColor: [222, 228, 235], lineWidth: { bottom: 0.15 }, overflow: "linebreak", valign: "top" },
     headStyles: { fillColor: [23, 43, 67], textColor: 255, fontStyle: "bold", fontSize: 8.5 },
     alternateRowStyles: { fillColor: [245, 248, 251] },
     columnStyles: { 0: { cellWidth: 12 }, 1: { cellWidth: 29 }, 2: { cellWidth: 86 }, 3: { cellWidth: 39 }, 4: { cellWidth: 37 }, 5: { cellWidth: 66 } },
@@ -33,10 +40,10 @@ export async function buildReport(rows: ReportRow[], language: "tr" | "de", date
   for (let page = 1; page <= total; page++) {
     doc.setPage(page);
     doc.setDrawColor(27, 93, 185); doc.setLineWidth(1.2); doc.line(14, 13, 283, 13);
-    doc.setFont("NotoSans", "bold"); doc.setTextColor(23, 43, 67); doc.setFontSize(21);
+    doc.setFont(reportFont, "bold"); doc.setTextColor(23, 43, 67); doc.setFontSize(21);
     doc.text(de ? "Nachweis der Bewerbungsaktivitäten" : "İş Başvuruları Raporu", 14, 26);
     doc.setFontSize(10); doc.text("Ahmet Tepe", 14, 35);
-    doc.setFont("NotoSans", "normal"); doc.setTextColor(85, 99, 117); doc.setFontSize(9);
+    doc.setFont(reportFont, "normal"); doc.setTextColor(85, 99, 117); doc.setFontSize(9);
     const fx = 247, fy = 31, fw = 9, fh = 6;
     if (de) {
       [[0,0,0],[221,0,0],[255,206,0]].forEach((rgb, i) => { doc.setFillColor(rgb[0],rgb[1],rgb[2]); doc.rect(fx,fy+i*fh/3,fw,fh/3,"F"); });
