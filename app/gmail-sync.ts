@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { isDuplicate, normalize } from "./record-utils";
+import { isConfirmedInterview } from "./interview-utils";
 
 type Database = D1Database;
 
@@ -32,7 +33,6 @@ const APPLICATION_SUBJECT_WORDS = /bewerb|initiativ|schulbegleit|it[- ]?support|
 const APPLICATION_BODY_WORDS = /hiermit\s+bewerbe|bewerbungsunterlagen|lebenslauf|anschreiben|für\s+die\s+(?:ausgeschriebene|offene)\s+stelle/i;
 const NOT_APPLICATION_WORDS = /jobcenter|arbeitsagentur|agentur\s+für\s+arbeit|kundennummer/i;
 const REPLY_FORWARD_SUBJECT = /^(?:(?:re|aw|wg|fwd|fw|antwort)\s*:\s*)+/i;
-const INTERVIEW_INVITATION_WORDS = /(vorstellungsgespräch|persönlichen gespräch|persönliches gespräch|zum gespräch|laden wir sie .* ein|termin bestätigen|mülakat|görüşme daveti|görüşmeye davet|görüşmeye çağır)/i;
 const AUTOMATED_JOB_ALERT_WORDS = /(gespeicherten?\s+stellensuche|gespeicherten?\s+suchen|neuer\s+treffer|alle\s+aktuellen\s+stellenangebote|stellenangebote\s+zu\s+ihrer\s+stellensuche|job\s+alert|saved\s+search)/i;
 
 const runtime = () => env as Record<string, string | undefined>;
@@ -182,7 +182,7 @@ function isAutomatedJobAlert(text: string) {
 }
 
 function responseStatus(text: string) {
-  return INTERVIEW_INVITATION_WORDS.test(text) && !isAutomatedJobAlert(text) ? "interview" : "received";
+  return isConfirmedInterview([{ title: text, body: "" }]) && !isAutomatedJobAlert(text) ? "interview" : "received";
 }
 
 async function refreshAccessToken(db: Database, state: TokenState) {

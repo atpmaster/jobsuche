@@ -183,6 +183,7 @@
   .interview-badge {
     display: inline-flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 5px;
     width: max-content;
     margin-top: 5px;
@@ -199,6 +200,14 @@
   .interview-badge > span {
     color: #a55408;
     font-size: 14px;
+  }
+
+  .interview-badge small {
+    flex-basis: 100%;
+    margin-left: 19px;
+    color: #805018;
+    font-size: 10px;
+    line-height: 1.25;
   }
 
   .file-entry.has-interview .file-main > strong {
