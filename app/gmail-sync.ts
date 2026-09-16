@@ -33,6 +33,7 @@ const APPLICATION_BODY_WORDS = /hiermit\s+bewerbe|bewerbungsunterlagen|lebenslau
 const NOT_APPLICATION_WORDS = /jobcenter|arbeitsagentur|agentur\s+für\s+arbeit|kundennummer/i;
 const REPLY_FORWARD_SUBJECT = /^(?:(?:re|aw|wg|fwd|fw|antwort)\s*:\s*)+/i;
 const INTERVIEW_INVITATION_WORDS = /(vorstellungsgespräch|persönlichen gespräch|persönliches gespräch|zum gespräch|laden wir sie .* ein|termin bestätigen|mülakat|görüşme daveti|görüşmeye davet|görüşmeye çağır)/i;
+const AUTOMATED_JOB_ALERT_WORDS = /(gespeicherten?\s+stellensuche|gespeicherten?\s+suchen|neuer\s+treffer|alle\s+aktuellen\s+stellenangebote|stellenangebote\s+zu\s+ihrer\s+stellensuche|job\s+alert|saved\s+search)/i;
 
 const runtime = () => env as Record<string, string | undefined>;
 
@@ -171,15 +172,17 @@ function applicationMatch(message: GmailMessage, apps: StoredApplication[]) {
     if (application.contactEmail && fromEmail && application.contactEmail.toLowerCase() === fromEmail) return true;
     const company = normalize(application.company);
     if (company.length >= 5 && haystack.includes(company)) return true;
-    const companyParts = application.company.split(/\s+/).map(normalize).filter((part) => part.length >= 5);
-    if (companyParts.some((part) => haystack.includes(part))) return true;
     const role = normalize(application.role);
     return role.length >= 8 && haystack.includes(role);
   });
 }
 
+function isAutomatedJobAlert(text: string) {
+  return AUTOMATED_JOB_ALERT_WORDS.test(text);
+}
+
 function responseStatus(text: string) {
-  return INTERVIEW_INVITATION_WORDS.test(text) ? "interview" : "received";
+  return INTERVIEW_INVITATION_WORDS.test(text) && !isAutomatedJobAlert(text) ? "interview" : "received";
 }
 
 async function refreshAccessToken(db: Database, state: TokenState) {
@@ -271,13 +274,17 @@ async function importReplies(db: Database, state: TokenState, ids: string[], app
   let updates = 0;
   for (const id of ids) {
     const message = await getMessage(db, state, id);
+    const subject = getHeader(message, "Subject") || "Gmail yanıtı";
+    const body = messageText(message).slice(0, 800);
+    // Job-alert newsletters are not replies to an application. Skipping them
+    // prevents a saved-search notification from being attached to a random
+    // application just because it contains a city or a common employer word.
+    if (isAutomatedJobAlert(`${subject} ${body}`)) continue;
     const application = applicationMatch(message, apps);
     if (!application) continue;
     const existing = await db.prepare("SELECT id FROM application_updates WHERE gmail_message_id = ?").bind(id).first<{ id: number }>();
     if (existing?.id) continue;
-    const subject = getHeader(message, "Subject") || "Gmail yanıtı";
     const date = berlinDate(message.internalDate);
-    const body = messageText(message).slice(0, 800);
     const status = responseStatus(`${subject} ${body}`);
     const statements = [
       db.prepare("INSERT INTO application_updates (application_id, update_type, title, body, happened_on, gmail_message_id) VALUES (?, 'E-posta', ?, ?, ?, ?)").bind(application.id, `Gmail yanıtı: ${subject}`.slice(0, 250), body || subject, date, id),

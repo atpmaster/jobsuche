@@ -38,6 +38,8 @@ type Task = { id: number; title: string; category: string; estimate: string; don
 // records are migrated below, so older forms cannot corrupt an application.
 const statuses = new Set(["new", "listed", "sent", "waiting", "received", "withdrawn", "saved", "preparing", "applied", "interview", "offer", "rejected"]);
 const interviewInvitationPattern = /(vorstellungsgespräch|persönlichen gespräch|persönliches gespräch|zum gespräch|laden wir sie .* ein|termin bestätigen|mülakat|görüşme daveti|görüşmeye davet|görüşmeye çağır)/i;
+const automatedJobAlertSql = `(lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%gespeicherten stellensuche%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%gespeicherte stellensuche%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%gespeicherten suchen%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%neuer treffer%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%alle aktuellen stellenangebote%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%stellenangebote zu ihrer stellensuche%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%job alert%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%saved search%')`;
+const interviewInvitationSql = `(lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%vorstellungsgespräch%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%persönlichen gespräch%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%persönliches gespräch%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%zum gespräch%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%termin bestätigen%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%mülakat%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%görüşme daveti%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%görüşmeye davet%')`;
 const canonicalStatus = (value: string) => ({
   saved: "new",
   preparing: "listed",
@@ -91,6 +93,13 @@ async function prepareDb() {
     db.prepare("UPDATE applications SET status = 'received' WHERE status IN ('offer', 'rejected')"),
     db.prepare("UPDATE applications SET status = 'interview' WHERE status = 'received' AND id IN (SELECT application_id FROM application_updates WHERE lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%vorstellungsgespräch%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%persönlichen gespräch%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%persönliches gespräch%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%mülakat%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%görüşme daveti%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%görüşmeye davet%')"),
     db.prepare("UPDATE applications SET status = 'received' WHERE status IN ('new', 'listed', 'sent', 'waiting') AND id IN (SELECT application_id FROM application_updates WHERE title LIKE 'Gmail yanıtı:%')"),
+    // Repair the known false positive: a saved-search notification must not
+    // leave an application highlighted as an interview invitation.
+    db.prepare(`UPDATE applications SET status = 'waiting', feedback = NULL, last_contact_on = NULL
+      WHERE status = 'interview'
+        AND id IN (SELECT application_id FROM application_updates WHERE ${automatedJobAlertSql})
+        AND NOT EXISTS (SELECT 1 FROM application_updates WHERE application_updates.application_id = applications.id AND ${interviewInvitationSql})
+        AND NOT EXISTS (SELECT 1 FROM application_updates WHERE application_updates.application_id = applications.id AND title LIKE 'Gmail yanıtı:%' AND NOT (${automatedJobAlertSql}))`),
   ]);
 
   const seeds = [
