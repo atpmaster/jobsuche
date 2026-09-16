@@ -37,6 +37,7 @@ type Task = { id: number; title: string; category: string; estimate: string; don
 // Keep the workflow deliberately small. Legacy values remain accepted while old
 // records are migrated below, so older forms cannot corrupt an application.
 const statuses = new Set(["new", "listed", "sent", "waiting", "received", "withdrawn", "saved", "preparing", "applied", "interview", "offer", "rejected"]);
+const interviewInvitationPattern = /(vorstellungsgespräch|persönlichen gespräch|persönliches gespräch|zum gespräch|laden wir sie .* ein|termin bestätigen|mülakat|görüşme daveti|görüşmeye davet|görüşmeye çağır)/i;
 const canonicalStatus = (value: string) => ({
   saved: "new",
   preparing: "listed",
@@ -295,10 +296,15 @@ export async function addApplicationUpdate(formData: FormData) {
   const title = String(formData.get("title") || "Yeni güncelleme").trim();
   if (!title) return;
   const date = String(formData.get("happenedOn") || new Date().toISOString().slice(0, 10));
-  await db.prepare("INSERT INTO application_updates (application_id, update_type, title, body, happened_on) VALUES (?, ?, ?, ?, ?)")
-    .bind(Number(formData.get("applicationId")), formData.get("updateType") || "Not", title, formData.get("body") || null, date).run();
-  await db.prepare("UPDATE applications SET feedback = ?, last_contact_on = ? WHERE id = ?")
-    .bind(formData.get("body") || title, date, Number(formData.get("applicationId"))).run();
+  const applicationId = Number(formData.get("applicationId"));
+  const updateType = String(formData.get("updateType") || "Not");
+  const body = String(formData.get("body") || "");
+  const hasInterviewInvitation = updateType === "Mülakat" || updateType === "Vorstellungsgespräch" || interviewInvitationPattern.test(`${title} ${body}`);
+  await db.batch([
+    db.prepare("INSERT INTO application_updates (application_id, update_type, title, body, happened_on) VALUES (?, ?, ?, ?, ?)").bind(applicationId, updateType, title, body || null, date),
+    db.prepare("UPDATE applications SET feedback = ?, last_contact_on = ? WHERE id = ?").bind(body || title, date, applicationId),
+    ...(hasInterviewInvitation ? [db.prepare("UPDATE applications SET status = 'interview' WHERE id = ?").bind(applicationId)] : []),
+  ]);
   revalidatePath("/");
 }
 
