@@ -25,6 +25,51 @@
 }
 
 @media screen {
+  .toolbar-stats > .toolbar-stat-link {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 7px 10px;
+    color: var(--muted);
+    background: #f7faff;
+    border: 1px solid #d5e2f4;
+    border-radius: 8px;
+    font: 13px Arial;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .toolbar-stats > .toolbar-stat-link:hover,
+  .toolbar-stats > .toolbar-stat-link:focus-visible {
+    color: #185cda;
+    background: #eaf1ff;
+    border-color: #8eafe2;
+    outline: none;
+  }
+
+  .toolbar-stats > .toolbar-stat-link strong {
+    margin: 0;
+    color: #14243b;
+    font: 700 26px Arial;
+  }
+
+  .toolbar-stats > .toolbar-stat-link.is-alert,
+  .toolbar-stats > .toolbar-stat-link.is-alert strong {
+    color: var(--orange);
+  }
+
+  .toolbar-stats > .toolbar-stat-link:last-child {
+    display: flex;
+  }
+
+  @media (max-width: 700px) {
+    .toolbar-stats > .toolbar-stat-link {
+      min-height: 63px;
+    }
+  }
+}
+
+@media screen {
   .interview-legend {
     display: flex;
     align-items: center;
@@ -149,7 +194,8 @@
     color: #6d3d0c;
   }
 
-  .file-entry.has-interview .status-pill.received {
+  .file-entry.has-interview .status-pill.received,
+  .file-entry.has-interview .status-pill.interview {
     color: #6e3a05;
     background: #ffe2ad;
     border: 1px solid #dfa04d;
@@ -299,7 +345,16 @@
  .career-tools table {width:100%;border-collapse:collapse;text-align:left}.career-tools td,.career-tools th {padding:10px;border-bottom:1px solid #dce4ee}
  .career-tools .confirm-check {flex-direction:row;align-items:center}.career-tools input[type=checkbox] {width:20px;height:20px;flex-shrink:0}
  .career-tools article {overflow-wrap:anywhere}.interview-card {padding:16px;border:1px solid #dce4ee;border-radius:10px;margin:14px 0}
- @media(max-width:650px){.career-form-grid {grid-template-columns:1fr}.career-stats {grid-template-columns:1fr}.career-tools>details {padding:14px}.career-tools select {width:100%}}
+ .monthly-interviews {margin-top:20px;padding:15px;border:2px solid #d98a24;border-left:7px solid #b9630e;border-radius:10px;background:#fffaf1;color:#633b0e}
+ .monthly-interviews h3 {margin:0 0 11px;color:#6d3d0c;font-size:15px}
+ .monthly-interviews>div {display:grid;gap:8px}
+ .monthly-interviews article {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) auto;gap:10px;align-items:center;padding:9px 10px;background:#fff;border:1px solid #e6b66e;border-radius:8px}
+ .monthly-interviews article strong,.monthly-interviews article span,.monthly-interviews article small {overflow-wrap:anywhere}
+ .monthly-interviews article strong {font-size:12px;color:#6d3d0c}
+ .monthly-interviews article span {font-size:12px;color:#805c2f}
+ .monthly-interviews article small {font-size:11px;color:#9a570c;font-weight:700;text-align:right;white-space:nowrap}
+ .monthly-interviews>p {margin:0;color:#805c2f;font-size:12px}
+ @media(max-width:650px){.career-form-grid {grid-template-columns:1fr}.career-stats {grid-template-columns:1fr}.career-tools>details {padding:14px}.career-tools select {width:100%}.monthly-interviews article {grid-template-columns:1fr;gap:3px}.monthly-interviews article small {text-align:left;white-space:normal}}
 }
 @media screen {
  .focus-board{margin:0 22px 20px;padding:20px;border:1px solid #bcd0f2;border-radius:14px;background:linear-gradient(135deg,#f7faff 0%,#eef5ff 100%)}

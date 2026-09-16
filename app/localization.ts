@@ -11,7 +11,7 @@ export const statusLabels: Record<Language, Record<string, string>> = {
     saved: "Yeni başvuru",
     preparing: "Listeye eklendi",
     applied: "Cevap bekleniyor",
-    interview: "Cevap geldi",
+    interview: "Mülakat daveti geldi",
     offer: "Cevap geldi",
     rejected: "Cevap geldi",
   },
@@ -25,7 +25,7 @@ export const statusLabels: Record<Language, Record<string, string>> = {
     saved: "Neue Bewerbung",
     preparing: "Zur Liste hinzugefügt",
     applied: "Rückmeldung ausstehend",
-    interview: "Rückmeldung erhalten",
+    interview: "Vorstellungsgespräch-Einladung erhalten",
     offer: "Rückmeldung erhalten",
     rejected: "Rückmeldung erhalten",
   },
@@ -137,6 +137,19 @@ function translate(value: string, language: Language, translations: Record<strin
   return fallbackReplacements.reduce((result, [pattern, tr, de]) => result.replace(pattern, language === "tr" ? tr : de), value);
 }
 
+function translateMixedContent(value: string, language: Language) {
+  const hasTurkish = /(başvuru|gönderildi|e-posta|geri dönüş|bekleniyor|tarihinde|sonradan|teyidi|portalda)/i.test(value);
+  const hasGerman = /(bewerbung|gesendet|e-mail|rückmeldung|steht|\beine\b|\bam\s+\d|nachgereicht|eingangsbestätigung|initiativbewerbung)/i.test(value);
+  if (!hasTurkish || !hasGerman) return null;
+  const date = value.match(/\b\d{2}\.\d{2}\.\d{4}\b/)?.[0];
+  if (language === "de") {
+    if (/initiativbewerbung/i.test(value)) return `Initiativbewerbung${date ? ` am ${date}` : ""} per E-Mail gesendet; eine Eingangsbestätigung steht noch aus.`;
+    return "Bewerbungsunterlagen wurden versendet; die Eingangsbestätigung steht noch aus.";
+  }
+  if (/initiativbewerbung/i.test(value)) return `${date ? `${date} tarihinde ` : ""}İnisiyatif başvurusu e-posta ile gönderildi; başvuru alındı teyidi henüz gelmedi.`;
+  return "Başvuru belgeleri gönderildi; başvuru alındı teyidi henüz gelmedi.";
+}
+
 export function localizedSource(value: string | null | undefined, language: Language) {
   if (!value) return value;
   return translate(value, language, sourceTranslations);
@@ -144,6 +157,8 @@ export function localizedSource(value: string | null | undefined, language: Lang
 
 export function localizedContent(value: string | null | undefined, language: Language) {
   if (!value) return value;
+  const mixed = translateMixedContent(value, language);
+  if (mixed) return mixed;
   if (value.includes("Stellennummer 18049-26")) {
     return language === "de"
       ? "Bewerbung für Stellennummer 18049-26 gesendet. EIS-Bewerbungsbogen sowie die aktualisierten Unterlagen wurden am 11.09.2026 nachgereicht; Rückmeldung steht aus."

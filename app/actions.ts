@@ -41,7 +41,6 @@ const canonicalStatus = (value: string) => ({
   saved: "new",
   preparing: "listed",
   applied: "waiting",
-  interview: "received",
   offer: "received",
   rejected: "received",
 }[value] ?? value);
@@ -88,7 +87,7 @@ async function prepareDb() {
     db.prepare("UPDATE applications SET status = 'new' WHERE status = 'saved'"),
     db.prepare("UPDATE applications SET status = 'listed' WHERE status = 'preparing'"),
     db.prepare("UPDATE applications SET status = 'waiting' WHERE status = 'applied'"),
-    db.prepare("UPDATE applications SET status = 'received' WHERE status IN ('interview', 'offer', 'rejected')"),
+    db.prepare("UPDATE applications SET status = 'received' WHERE status IN ('offer', 'rejected')"),
     db.prepare("UPDATE applications SET status = 'received' WHERE status IN ('new', 'listed', 'sent', 'waiting') AND id IN (SELECT application_id FROM application_updates WHERE title LIKE 'Gmail yanıtı:%')"),
   ]);
 
@@ -255,7 +254,7 @@ export async function updateApplicationStatus(formData: FormData) {
   if (!statuses.has(requestedStatus)) return;
   const status = canonicalStatus(requestedStatus);
   const id = Number(formData.get("id"));
-  await db.prepare("UPDATE applications SET status = ?, last_contact_on = CASE WHEN ? = 'received' THEN CURRENT_DATE ELSE last_contact_on END WHERE id = ?").bind(status, status, id).run();
+  await db.prepare("UPDATE applications SET status = ?, last_contact_on = CASE WHEN ? IN ('received', 'interview') THEN CURRENT_DATE ELSE last_contact_on END WHERE id = ?").bind(status, status, id).run();
   await db.prepare("INSERT INTO application_updates (application_id, update_type, title, body) VALUES (?, 'Durum', ?, ?)").bind(id, `Durum: ${status}`, `Başvuru durumu ${status} olarak güncellendi.`).run();
   revalidatePath("/");
 }

@@ -31,7 +31,7 @@ const copy = {
   }
 } as const;
 
-const statusOrder = ["new", "listed", "sent", "waiting", "received"];
+const statusOrder = ["new", "listed", "sent", "waiting", "received", "interview"];
 const trackLabels: Record<Language, Record<string, string>> = { tr: { teaching: "Eğitim", cyber: "Siber güvenlik", other: "Alternatif" }, de: { teaching: "Bildung", cyber: "Cybersecurity", other: "Sonstige" } };
 const updateTypeOptions: Record<Language, Array<{ value: string; label: string }>> = { tr: [{ value: "Not", label: "Not" }, { value: "E-posta", label: "E-posta" }, { value: "Telefon", label: "Telefon" }, { value: "Mülakat", label: "Mülakat" }, { value: "Durum", label: "Durum" }], de: [{ value: "Notiz", label: "Notiz" }, { value: "E-Mail", label: "E-Mail" }, { value: "Telefon", label: "Telefon" }, { value: "Vorstellungsgespräch", label: "Vorstellungsgespräch" }, { value: "Status", label: "Status" }] };
 const statusForLanguage = (language: Language) => statusLabels[language];
@@ -63,9 +63,13 @@ function initials(value: string) {
 function localizedStep(label: string, language: Language) {
   const translations: Record<string, Record<Language, string>> = {
     "İlanı ve şartları kontrol et": { tr: "İlanı ve şartları kontrol et", de: "Stellenanzeige und Anforderungen prüfen" },
+    "Stellenanzeige und Anforderungen prüfen": { tr: "İlanı ve şartları kontrol et", de: "Stellenanzeige und Anforderungen prüfen" },
     "CV ve Anschreiben uyarla": { tr: "CV ve ön yazıyı uyarla", de: "CV und Anschreiben anpassen" },
+    "CV ve ön yazıyı uyarla": { tr: "CV ve ön yazıyı uyarla", de: "CV und Anschreiben anpassen" },
     "Başvuruyu gönder": { tr: "Başvuruyu gönder", de: "Bewerbung versenden" },
+    "Bewerbung versenden": { tr: "Başvuruyu gönder", de: "Bewerbung versenden" },
     "Geri dönüşü kaydet": { tr: "Geri dönüşü kaydet", de: "Rückmeldung dokumentieren" },
+    "Rückmeldung dokumentieren": { tr: "Geri dönüşü kaydet", de: "Rückmeldung dokumentieren" },
   };
   return translations[label]?.[language] ?? label;
 }
@@ -73,15 +77,23 @@ function localizedStep(label: string, language: Language) {
 function localizedTask(value: string, language: Language) {
   const translations: Record<string, Record<Language, string>> = {
     "Takip tarihi gelen başvuruları kontrol et": { tr: value, de: "Bewerbungen mit fälligem Nachfassen prüfen" },
+    "Bewerbungen mit fälligem Nachfassen prüfen": { tr: "Takip tarihi gelen başvuruları kontrol et", de: value },
     "En yüksek puanlı ilana CV'yi uyarlayıp gönder": { tr: value, de: "CV auf passendste Stelle anpassen und senden" },
+    "CV auf passendste Stelle anpassen und senden": { tr: "En yüksek puanlı ilana CV'yi uyarlayıp gönder", de: value },
     "Almanca mülakat cevabını sesli prova et": { tr: value, de: "Antwort für Vorstellungsgespräch auf Deutsch üben" },
+    "Antwort für Vorstellungsgespräch auf Deutsch üben": { tr: "Almanca mülakat cevabını sesli prova et", de: value },
   };
   return translations[value]?.[language] ?? value;
 }
 
 function localizedCategory(value: string, language: Language) {
-  if (language === "tr") return value;
-  return { Takip: "Nachfassen", Başvuru: "Bewerbung", Almanca: "Deutsch", Kariyer: "Karriere" }[value] ?? value;
+  const translations: Record<string, Record<Language, string>> = {
+    Takip: { tr: "Takip", de: "Nachfassen" }, Nachfassen: { tr: "Takip", de: "Nachfassen" },
+    Başvuru: { tr: "Başvuru", de: "Bewerbung" }, Bewerbung: { tr: "Başvuru", de: "Bewerbung" },
+    Almanca: { tr: "Almanca", de: "Deutsch" }, Deutsch: { tr: "Almanca", de: "Deutsch" },
+    Kariyer: { tr: "Kariyer", de: "Karriere" }, Karriere: { tr: "Kariyer", de: "Karriere" },
+  };
+  return translations[value]?.[language] ?? value;
 }
 
 function isReportNoise(application: Application) {
@@ -92,7 +104,7 @@ function isReportNoise(application: Application) {
 const interviewInvitationPattern = /(vorstellungsgespräch|persönlichen gespräch|persönliches gespräch|zum gespräch|laden wir sie .* ein|termin bestätigen|mülakat|görüşme daveti|görüşmeye davet|görüşmeye çağır)/i;
 
 function isInterviewInvitation(application: Application, interviewApplicationIds: ReadonlySet<number>) {
-  if (interviewApplicationIds.has(application.id)) return true;
+  if (application.status === "interview" || interviewApplicationIds.has(application.id)) return true;
   const text = [application.feedback, application.notes, application.nextAction, ...application.updates.flatMap((update) => [update.title, update.body])].filter(Boolean).join(" ");
   return interviewInvitationPattern.test(text);
 }
@@ -173,7 +185,7 @@ export function Dashboard({ applications: allApplications, tasks, today, career,
     return b.appliedOn.localeCompare(a.appliedOn) || b.id - a.id;
   });
   const trash = allApplications.filter(item => item.deletedAt && !career.merges.some(m=>m.sourceId===item.id));
-  const [customerNumber,setCustomerNumber]=useState("");
+  const [customerNumber,setCustomerNumber]=useState("24112//0010371");
   const [signature,setSignature]=useState(false);
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -181,6 +193,7 @@ export function Dashboard({ applications: allApplications, tasks, today, career,
   const [filterTrack, setFilterTrack] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [summaryFilter, setSummaryFilter] = useState("");
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -193,7 +206,7 @@ export function Dashboard({ applications: allApplications, tasks, today, career,
   const openStatuses = new Set(["new", "listed", "sent", "waiting"]);
   const active = applications.filter((item) => openStatuses.has(item.status));
   const awaiting = applications.filter((item) => item.status === "waiting");
-  const inMotion = applications.filter((item) => item.status === "received");
+  const inMotion = applications.filter((item) => ["received", "interview"].includes(item.status));
   const followUps = applications.filter((item) => item.nextActionDate && item.nextActionDate <= today && openStatuses.has(item.status) && !dismissed.has(followUpKey(item)));
   const completedTasks = tasks.filter((task) => task.done).length;
   const avgScore = applications.length ? Math.round(applications.reduce((sum, item) => sum + item.score, 0) / applications.length) : 0;
@@ -206,10 +219,15 @@ export function Dashboard({ applications: allApplications, tasks, today, career,
   }, [language]);
 
   const changeLanguage = (next: Language) => setLanguage(next);
-  const filtered = applications.filter(item => (!query || normalize([item.company,item.role,item.location].join(" ")).includes(normalize(query))) && (!filterStatus || item.status === filterStatus) && (!filterTrack || item.track === filterTrack) && (!dateFrom || !!item.appliedOn && item.appliedOn >= dateFrom) && (!dateTo || !!item.appliedOn && item.appliedOn <= dateTo));
+  const filtered = applications.filter(item => (!query || normalize([item.company,item.role,item.location].join(" ")).includes(normalize(query))) && (!filterStatus || item.status === filterStatus) && (!filterTrack || item.track === filterTrack) && (!dateFrom || !!item.appliedOn && item.appliedOn >= dateFrom) && (!dateTo || !!item.appliedOn && item.appliedOn <= dateTo) && (!summaryFilter || (summaryFilter === "open" && openStatuses.has(item.status)) || (summaryFilter === "waiting" && item.status === "waiting") || (summaryFilter === "advanced" && ["received", "interview"].includes(item.status)) || (summaryFilter === "due" && followUps.some((followUp) => followUp.id === item.id))));
   const reportApplications = filtered;
   const interviewApplications = filtered.filter((item) => isInterviewInvitation(item, interviewApplicationIds));
   const interviewCount = interviewApplications.length;
+  const focusSummary = (nextFilter: string) => {
+    setSummaryFilter(nextFilter);
+    setQuery(""); setFilterStatus(""); setFilterTrack(""); setDateFrom(""); setDateTo("");
+    requestAnimationFrame(() => document.getElementById("basvurular")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
   const invalidRange = !!dateFrom && !!dateTo && dateFrom > dateTo;
   const exportBackup = () => {
     const url = URL.createObjectURL(new Blob([JSON.stringify({schemaVersion:1, exportedAt:new Date().toISOString(), applications:allApplications,tasks,career},null,2)],{type:"application/json"}));
@@ -345,6 +363,7 @@ export function Dashboard({ applications: allApplications, tasks, today, career,
                 {saveError && <p role="alert">{saveError}</p>}
                 <div className="form-row"><label>{language === "de" ? "Arbeitgeber" : "Şirket / kurum"}<input name="company" required placeholder={language === "de" ? "z. B. Landkreis Gifhorn" : "Örn. Landkreis Gifhorn"} /></label><label>{language === "de" ? "Position" : "Pozisyon"}<input name="role" required placeholder={language === "de" ? "z. B. Mathematiklehrer" : "Örn. Mathematiklehrer"} /></label></div>
                 <div className="form-row"><label>{language === "de" ? "Bereich" : "Alan"}<select name="track"><option value="teaching">{trackLabels[language].teaching}</option><option value="cyber">{trackLabels[language].cyber}</option><option value="other">{trackLabels[language].other}</option></select></label><label>{language === "de" ? "Passung" : "Uygunluk"}<input name="score" type="number" min="0" max="100" defaultValue="80" /></label></div>
+                <label>{t.status}<select name="status" defaultValue="new">{statusOrder.map(status => <option key={status} value={status}>{statuses[status]}</option>)}</select></label>
                 <div className="form-row"><label>{t.source}<input name="source" placeholder={language === "de" ? "Arbeitsagentur, LinkedIn ..." : "Arbeitsagentur, LinkedIn…"} /></label><label>{language === "de" ? "Ort" : "Konum"}<input name="location" placeholder="Gifhorn" /></label></div>
                 <div className="form-row"><label>{language === "de" ? "Bewerbung am" : "Başvuru tarihi"}<input name="appliedOn" type="date" /></label><label>{language === "de" ? "Nachfassen am" : "Takip tarihi"}<input name="nextActionDate" type="date" /></label></div>
                 <label>{language === "de" ? "Stellenlink" : "İlan bağlantısı"}<input name="url" type="url" placeholder="https://…" /></label>
@@ -357,15 +376,15 @@ export function Dashboard({ applications: allApplications, tasks, today, career,
           </header>
 
           {pdfError && <p role="alert" className="pdf-error">{pdfError}</p>}
-          <div className="file-toolbar" id="takip"><div className="toolbar-title"><span className="folder-tab">A</span><strong>{language === "de" ? "Alle Bewerbungen" : "Tüm başvurular"}</strong><b>{applications.length}</b></div><div className="toolbar-stats"><span><strong>{active.length}</strong> {t.open}</span><span><strong>{awaiting.length}</strong> {t.awaiting}</span><span><strong>{inMotion.length}</strong> {t.advanced}</span><span className={followUps.length ? "is-alert" : ""}><strong>{followUps.length}</strong> {t.due}</span><span><strong>%{avgScore}</strong> {t.averageMatch}</span></div><span className="toolbar-date">{todayLabel}</span>{dismissed.size > 0 && <button className="restore-alerts" type="button" onClick={restoreAll}>{t.restoreDismissed}</button>}</div>
+          <div className="file-toolbar" id="takip"><div className="toolbar-title"><span className="folder-tab">A</span><strong>{language === "de" ? "Alle Bewerbungen" : "Tüm başvurular"}</strong><b>{applications.length}</b></div><div className="toolbar-stats"><button type="button" className="toolbar-stat-link" onClick={() => focusSummary("open")}><strong>{active.length}</strong> {t.open}</button><button type="button" className="toolbar-stat-link" onClick={() => focusSummary("waiting")}><strong>{awaiting.length}</strong> {t.awaiting}</button><button type="button" className="toolbar-stat-link" onClick={() => focusSummary("advanced")}><strong>{inMotion.length}</strong> {t.advanced}</button><button type="button" className={`toolbar-stat-link ${followUps.length ? "is-alert" : ""}`} onClick={() => focusSummary("due")}><strong>{followUps.length}</strong> {t.due}</button><button type="button" className="toolbar-stat-link" onClick={() => focusSummary("")}><strong>%{avgScore}</strong> {t.averageMatch}</button></div><span className="toolbar-date">{todayLabel}</span>{dismissed.size > 0 && <button className="restore-alerts" type="button" onClick={restoreAll}>{t.restoreDismissed}</button>}</div>
 
           <section className="record-controls" aria-label={language==="de"?"Suche und Bericht":"Arama ve rapor"}>
             <label>{language==="de"?"Arbeitgeber, Stelle oder Ort suchen":"Kurum, pozisyon veya şehir ara"}<input type="search" value={query} onChange={e=>setQuery(e.target.value)} /></label>
-            <label>{t.status}<select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}><option value="">{t.all}</option>{statusOrder.map(s=><option key={s} value={s}>{statuses[s]}</option>)}</select></label>
-            <label>{language==="de"?"Bereich":"Alan"}<select value={filterTrack} onChange={e=>setFilterTrack(e.target.value)}><option value="">{t.all}</option>{Object.entries(trackLabels[language]).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
-            <label>{language==="de"?"Bewerbungsdatum ab":"Başvuru tarihi başlangıç"}<input type="date" value={dateFrom} max={dateTo||undefined} onChange={e=>setDateFrom(e.target.value)} /></label>
-            <label>{language==="de"?"Bis":"Bitiş"}<input type="date" value={dateTo} min={dateFrom||undefined} onChange={e=>setDateTo(e.target.value)} /></label>
-            <div className="control-actions"><button type="button" onClick={()=>{setQuery("");setFilterStatus("");setFilterTrack("");setDateFrom("");setDateTo("");}}>{language==="de"?"Filter zurücksetzen":"Filtreleri temizle"}</button><button type="button" onClick={exportBackup}>{language==="de"?"Datensicherung (JSON)":"Verileri yedekle (JSON)"}</button></div>
+            <label>{t.status}<select value={filterStatus} onChange={e=>{setSummaryFilter("");setFilterStatus(e.target.value)}}><option value="">{t.all}</option>{statusOrder.map(s=><option key={s} value={s}>{statuses[s]}</option>)}</select></label>
+            <label>{language==="de"?"Bereich":"Alan"}<select value={filterTrack} onChange={e=>{setSummaryFilter("");setFilterTrack(e.target.value)}}><option value="">{t.all}</option>{Object.entries(trackLabels[language]).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
+            <label>{language==="de"?"Bewerbungsdatum ab":"Başvuru tarihi başlangıç"}<input type="date" value={dateFrom} max={dateTo||undefined} onChange={e=>{setSummaryFilter("");setDateFrom(e.target.value)}} /></label>
+            <label>{language==="de"?"Bis":"Bitiş"}<input type="date" value={dateTo} min={dateFrom||undefined} onChange={e=>{setSummaryFilter("");setDateTo(e.target.value)}} /></label>
+            <div className="control-actions"><button type="button" onClick={()=>{setQuery("");setFilterStatus("");setFilterTrack("");setDateFrom("");setDateTo("");setSummaryFilter("");}}>{language==="de"?"Filter zurücksetzen":"Filtreleri temizle"}</button><button type="button" onClick={exportBackup}>{language==="de"?"Datensicherung (JSON)":"Verileri yedekle (JSON)"}</button></div>
       <p role="status">{invalidRange?(language==="de"?"Datumsbereich ungültig.":"Tarih aralığı geçersiz."):`${filtered.length} / ${applications.length}`}</p>
             <details><summary>{language==="de"?"Papierkorb":"Çöp kutusu"} ({trash.length})</summary>{trash.map(item=><div className="trash-row" key={item.id}><span>{item.company} — {item.role}</span><form action={async data=>{await restoreApplication(data);router.refresh();}}><input type="hidden" name="id" value={item.id}/><button type="submit">{language==="de"?"Wiederherstellen":"Geri yükle"}</button></form></div>)}{!trash.length&&<p>{language==="de"?"Papierkorb ist leer.":"Çöp kutusu boş."}</p>}</details>
           </section>
