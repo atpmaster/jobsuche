@@ -23,6 +23,79 @@
   @media(max-width:700px){.side-rail{padding:14px 16px;flex-wrap:wrap}.side-rail nav{width:100%;margin:0;justify-content:space-between}.side-rail nav a,.side-rail nav a.active{display:flex;width:auto;height:auto;font-size:13px;border:0;border-radius:7px}.workspace{padding:22px 12px 40px}.workspace-header{display:block}.workspace-header h1{font-size:28px;overflow-wrap:normal}.header-actions{display:flex;justify-content:flex-start;margin-top:18px;gap:8px}.header-actions .add-menu{margin:0}.live-control{flex:none}.language-switcher{order:0}.report-button{order:1}.live-control{order:2}.add-menu{order:3}.toolbar-stats{display:grid;grid-template-columns:1fr 1fr;width:100%;gap:18px}.toolbar-stats strong{font-size:24px}.file-toolbar{display:flex}.list-intro{padding:20px 16px}.list-note{display:none}.list-head{display:none}.file-summary{grid-template-columns:38px minmax(0,1fr) 20px;padding:18px 14px;gap:10px;min-height:0}.file-index{display:none}.file-avatar{grid-row:1 / span 4;grid-column:1}.file-main{grid-row:1;grid-column:2}.file-source{grid-row:2;grid-column:2}.file-source small{margin-top:2px}.file-summary>.status-pill{grid-row:3;grid-column:2}.file-follow{grid-row:4;grid-column:2}.file-chevron{grid-row:1;grid-column:3}.file-detail{padding:14px}.detail-grid,.detail-lower{grid-template-columns:1fr}.inspector-column{grid-template-columns:1fr}.inspector-panel,.tasks-section{grid-column:auto}.follow-up-alerts{margin:0 12px 14px;padding:14px}.follow-up-alert-head,.follow-up-alert{flex-direction:column;align-items:stretch}.follow-up-alert-actions{width:100%;margin-top:8px}.follow-up-alert-actions button{flex:1}.alert-dismiss-all{align-self:start}.form-popover{padding:20px;top:3vh;max-height:94vh}.form-row{grid-template-columns:1fr}}
   @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 }
+
+@media screen {
+  .interview-legend {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 22px 14px;
+    padding: 9px 12px;
+    color: #7b4a16;
+    background: #fff8ec;
+    border: 1px solid #edc98f;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 650;
+  }
+
+  .interview-legend-mark {
+    width: 10px;
+    height: 10px;
+    flex: 0 0 auto;
+    background: #c8751d;
+    border-radius: 50%;
+    box-shadow: 0 0 0 3px #fbe5c2;
+  }
+
+  .file-entry.has-interview {
+    margin: 10px 12px;
+    overflow: hidden;
+    background: #fffaf2;
+    border: 2px solid #e0a354;
+    border-left: 6px solid #c8751d;
+    border-radius: 12px;
+    box-shadow: 0 4px 14px rgb(154 85 24 / 12%);
+  }
+
+  .file-entry.has-interview > .file-summary {
+    background: linear-gradient(105deg, #fff8ec 0%, #fffdf8 72%);
+  }
+
+  .file-entry.has-interview > .file-summary:hover,
+  .file-entry.has-interview[open] > .file-summary {
+    background: linear-gradient(105deg, #ffefd1 0%, #fff8ec 72%);
+  }
+
+  .file-entry.has-interview .file-detail {
+    background: #fffdf8;
+    border-top-color: #edc98f;
+  }
+
+  .interview-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    width: max-content;
+    margin-top: 3px;
+    padding: 4px 8px;
+    color: #7b4a16;
+    background: #ffedc9;
+    border: 1px solid #e6b66e;
+    border-radius: 999px;
+    font: 700 11px/1.2 Arial, sans-serif;
+  }
+
+  .interview-badge > span {
+    color: #c8751d;
+    font-size: 13px;
+  }
+
+  @media (max-width: 700px) {
+    .interview-legend { margin: 0 12px 14px; }
+    .file-entry.has-interview { margin: 9px 8px; }
+  }
+}
 @media screen{.gmail-session{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}.gmail-session form{margin:0}.gmail-switch,.gmail-disconnect{min-height:36px;padding:7px 10px;border:1px solid #b8c8e8;border-radius:8px;color:#185cda;background:#fff;font:600 12px Arial;text-decoration:none;white-space:nowrap;cursor:pointer}.gmail-switch:hover,.gmail-disconnect:hover{background:#eaf1ff}.gmail-disconnect{color:#8a2e2e;border-color:#e2bcbc;background:#fff7f7}.gmail-disconnect:hover{background:#fff0f0}}
 @media print{.file-manager{display:block!important}.screen-ui{display:none!important}.print-report{width:100%!important}.print-table tr{break-inside:avoid}.print-table thead{display:table-header-group}.print-details{break-inside:auto}.print-details article{break-inside:avoid}}
 @media screen {
