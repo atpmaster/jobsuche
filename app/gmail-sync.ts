@@ -32,6 +32,7 @@ const APPLICATION_SUBJECT_WORDS = /bewerb|initiativ|schulbegleit|it[- ]?support|
 const APPLICATION_BODY_WORDS = /hiermit\s+bewerbe|bewerbungsunterlagen|lebenslauf|anschreiben|für\s+die\s+(?:ausgeschriebene|offene)\s+stelle/i;
 const NOT_APPLICATION_WORDS = /jobcenter|arbeitsagentur|agentur\s+für\s+arbeit|kundennummer/i;
 const REPLY_FORWARD_SUBJECT = /^(?:(?:re|aw|wg|fwd|fw|antwort)\s*:\s*)+/i;
+const INTERVIEW_INVITATION_WORDS = /(vorstellungsgespräch|persönlichen gespräch|persönliches gespräch|zum gespräch|laden wir sie .* ein|termin bestätigen|mülakat|görüşme daveti|görüşmeye davet|görüşmeye çağır)/i;
 
 const runtime = () => env as Record<string, string | undefined>;
 
@@ -177,10 +178,8 @@ function applicationMatch(message: GmailMessage, apps: StoredApplication[]) {
   });
 }
 
-function responseStatus(_text: string) {
-  // The tracker only needs to distinguish no response from a response.
-  // The complete message is retained in the timeline and feedback fields.
-  return "received";
+function responseStatus(text: string) {
+  return INTERVIEW_INVITATION_WORDS.test(text) ? "interview" : "received";
 }
 
 async function refreshAccessToken(db: Database, state: TokenState) {

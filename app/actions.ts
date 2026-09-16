@@ -88,6 +88,7 @@ async function prepareDb() {
     db.prepare("UPDATE applications SET status = 'listed' WHERE status = 'preparing'"),
     db.prepare("UPDATE applications SET status = 'waiting' WHERE status = 'applied'"),
     db.prepare("UPDATE applications SET status = 'received' WHERE status IN ('offer', 'rejected')"),
+    db.prepare("UPDATE applications SET status = 'interview' WHERE status = 'received' AND id IN (SELECT application_id FROM application_updates WHERE lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%vorstellungsgespräch%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%persönlichen gespräch%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%persönliches gespräch%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%mülakat%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%görüşme daveti%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%görüşmeye davet%')"),
     db.prepare("UPDATE applications SET status = 'received' WHERE status IN ('new', 'listed', 'sent', 'waiting') AND id IN (SELECT application_id FROM application_updates WHERE title LIKE 'Gmail yanıtı:%')"),
   ]);
 

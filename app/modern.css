@@ -47,6 +47,17 @@
     outline: none;
   }
 
+  .toolbar-stats > .toolbar-stat-link.is-selected {
+    color: #fff;
+    background: #185cda;
+    border-color: #185cda;
+    box-shadow: 0 3px 8px rgb(24 92 218 / 22%);
+  }
+
+  .toolbar-stats > .toolbar-stat-link.is-selected strong {
+    color: #fff;
+  }
+
   .toolbar-stats > .toolbar-stat-link strong {
     margin: 0;
     color: #14243b;
