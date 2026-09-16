@@ -63,7 +63,7 @@ export async function buildReport(rows: ReportRow[], language: "tr" | "de", date
     if(profile?.signature && page===total) {doc.setDrawColor(110,120,130);doc.setLineWidth(0.2);doc.line(180,183,283,183);doc.setFontSize(8);doc.text(de?"Ort, Datum, Unterschrift":"Yer, tarih, imza",180,188);}
     doc.setDrawColor(210, 220, 230); doc.setLineWidth(0.2); doc.line(14, 194, 283, 194);
     doc.setFontSize(8);
-    doc.text(de ? "Zusammenstellung nach den erfassten Angaben. Kein Versandbeleg." : "Sisteme girilen bilgilere göre hazırlanmıştır. Gönderim makbuzu değildir.", 14, 200);
+    doc.text(de ? "Nach den im System erfassten Angaben erstellt. Erstellt von Ahmet Tepe mit einem KI-gestützten Automatisierungssystem." : "Sisteme girilen bilgilere göre hazırlanmıştır. Ahmet Tepe tarafından Yapay Zekâ destekli otomasyon sistemi ile oluşturulmuştur.", 14, 200);
     doc.text(`${de ? "Seite" : "Sayfa"} ${page} / ${total}`, 283, 200, { align: "right" });
   }
   return doc;

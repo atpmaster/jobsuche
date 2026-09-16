@@ -40,6 +40,8 @@ const statuses = new Set(["new", "listed", "sent", "waiting", "received", "withd
 const interviewInvitationPattern = /(vorstellungsgespräch|persönlichen gespräch|persönliches gespräch|zum gespräch|laden wir sie .* ein|termin bestätigen|mülakat|görüşme daveti|görüşmeye davet|görüşmeye çağır)/i;
 const automatedJobAlertSql = `(lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%gespeicherten stellensuche%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%gespeicherte stellensuche%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%gespeicherten suchen%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%neuer treffer%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%alle aktuellen stellenangebote%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%stellenangebote zu ihrer stellensuche%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%job alert%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%saved search%')`;
 const interviewInvitationSql = `(lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%vorstellungsgespräch%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%persönlichen gespräch%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%persönliches gespräch%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%zum gespräch%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%termin bestätigen%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%mülakat%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%görüşme daveti%' OR lower(COALESCE(title, '') || ' ' || COALESCE(body, '')) LIKE '%görüşmeye davet%')`;
+const interviewNextAction = "Mülakat tarihini ve bağlantısını doğrula; görüşmeye hazırlan";
+const genericWaitingActionPattern = /(geri dönüş|rückmeldung|eingangsbestätigung|bekle|abwarten|prüf|kontroll)/i;
 const canonicalStatus = (value: string) => ({
   saved: "new",
   preparing: "listed",
@@ -47,6 +49,12 @@ const canonicalStatus = (value: string) => ({
   offer: "received",
   rejected: "received",
 }[value] ?? value);
+
+function nextActionForStatus(status: string, value: string | null) {
+  const action = value?.trim() ?? "";
+  if (status === "interview" && (!action || genericWaitingActionPattern.test(action))) return interviewNextAction;
+  return action || null;
+}
 
 async function ensureColumn(db: D1Database, table: string, column: string, definition: string) {
   const info = await db.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>();
@@ -100,6 +108,7 @@ async function prepareDb() {
         AND id IN (SELECT application_id FROM application_updates WHERE ${automatedJobAlertSql})
         AND NOT EXISTS (SELECT 1 FROM application_updates WHERE application_updates.application_id = applications.id AND ${interviewInvitationSql})
         AND NOT EXISTS (SELECT 1 FROM application_updates WHERE application_updates.application_id = applications.id AND title LIKE 'Gmail yanıtı:%' AND NOT (${automatedJobAlertSql}))`),
+    db.prepare("UPDATE applications SET next_action = ? WHERE status = 'interview' AND (next_action IS NULL OR lower(next_action) LIKE '%geri dönüş%' OR lower(next_action) LIKE '%rückmeldung%' OR lower(next_action) LIKE '%bekle%' OR lower(next_action) LIKE '%abwarten%' OR lower(next_action) LIKE '%eingangsbestätigung%')").bind(interviewNextAction),
   ]);
 
   const seeds = [
@@ -232,6 +241,7 @@ export async function getDashboardData() {
     gmailConnected: gmailSync.connected,
     applications: apps.results.map((application) => ({
       ...application,
+      nextAction: nextActionForStatus(application.status, application.nextAction),
       updates: updates.results.filter((item) => item.applicationId === application.id),
       steps: steps.results.filter((item) => item.applicationId === application.id),
     })),
@@ -248,13 +258,14 @@ export async function addApplication(formData: FormData) {
   const score = Math.max(0, Math.min(100, Number(formData.get("score")) || 50));
   const requestedStatus = String(formData.get("status") || "new");
   const status = statuses.has(requestedStatus) ? canonicalStatus(requestedStatus) : "new";
+  const nextAction = nextActionForStatus(status, String(formData.get("nextAction") || ""));
   await db.prepare(`INSERT INTO applications (company, role, track, location, score, status, deadline, url, notes, source, applied_on, contact_name, contact_email, contact_phone, next_action, next_action_date)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(
       formData.get("company"), formData.get("role"), formData.get("track"), formData.get("location") || null, score,
       status, formData.get("deadline") || null, formData.get("url") || null, formData.get("notes") || null,
       formData.get("source") || null, formData.get("appliedOn") || null, formData.get("contactName") || null, formData.get("contactEmail") || null,
-      formData.get("contactPhone") || null, formData.get("nextAction") || null, formData.get("nextActionDate") || null,
+      formData.get("contactPhone") || null, nextAction, formData.get("nextActionDate") || null,
     ).run();
   revalidatePath("/");
 }
@@ -265,7 +276,7 @@ export async function updateApplicationStatus(formData: FormData) {
   if (!statuses.has(requestedStatus)) return;
   const status = canonicalStatus(requestedStatus);
   const id = Number(formData.get("id"));
-  await db.prepare("UPDATE applications SET status = ?, last_contact_on = CASE WHEN ? IN ('received', 'interview') THEN CURRENT_DATE ELSE last_contact_on END WHERE id = ?").bind(status, status, id).run();
+  await db.prepare("UPDATE applications SET status = ?, next_action = CASE WHEN ? = 'interview' AND (next_action IS NULL OR lower(next_action) LIKE '%geri dönüş%' OR lower(next_action) LIKE '%rückmeldung%' OR lower(next_action) LIKE '%bekle%' OR lower(next_action) LIKE '%abwarten%') THEN ? ELSE next_action END, last_contact_on = CASE WHEN ? IN ('received', 'interview') THEN CURRENT_DATE ELSE last_contact_on END WHERE id = ?").bind(status, status, status === "interview" ? interviewNextAction : null, status, id).run();
   await db.prepare("INSERT INTO application_updates (application_id, update_type, title, body) VALUES (?, 'Durum', ?, ?)").bind(id, `Durum: ${status}`, `Başvuru durumu ${status} olarak güncellendi.`).run();
   revalidatePath("/");
 }
@@ -282,12 +293,13 @@ export async function updateApplicationRecord(formData: FormData) {
   const nextActionDate = String(formData.get("nextActionDate") || "");
   if (!Number.isInteger(id) || !statuses.has(requestedStatus) || !["teaching", "cyber", "other"].includes(track)) return;
   if ((appliedOn && !datePattern.test(appliedOn)) || (nextActionDate && !datePattern.test(nextActionDate))) return;
+  const nextAction = nextActionForStatus(status, String(formData.get("nextAction") || ""));
   await db.prepare(`UPDATE applications SET company = ?, role = ?, track = ?, location = ?, score = ?, status = ?, source = ?, applied_on = ?, next_action = ?, next_action_date = ?, contact_name = ?, contact_email = ?, notes = ?, feedback = ? WHERE id = ? AND deleted_at IS NULL`)
     .bind(
       String(formData.get("company") || "").trim(), String(formData.get("role") || "").trim(), track,
       String(formData.get("location") || "").trim() || null, score, status,
       String(formData.get("source") || "").trim() || null, appliedOn || null,
-      String(formData.get("nextAction") || "").trim() || null, nextActionDate || null,
+      nextAction, nextActionDate || null,
       String(formData.get("contactName") || "").trim() || null, String(formData.get("contactEmail") || "").trim() || null,
       String(formData.get("notes") || "").trim() || null, String(formData.get("feedback") || "").trim() || null, id,
     ).run();
@@ -312,7 +324,7 @@ export async function addApplicationUpdate(formData: FormData) {
   await db.batch([
     db.prepare("INSERT INTO application_updates (application_id, update_type, title, body, happened_on) VALUES (?, ?, ?, ?, ?)").bind(applicationId, updateType, title, body || null, date),
     db.prepare("UPDATE applications SET feedback = ?, last_contact_on = ? WHERE id = ?").bind(body || title, date, applicationId),
-    ...(hasInterviewInvitation ? [db.prepare("UPDATE applications SET status = 'interview' WHERE id = ?").bind(applicationId)] : []),
+    ...(hasInterviewInvitation ? [db.prepare("UPDATE applications SET status = 'interview', next_action = CASE WHEN next_action IS NULL OR lower(next_action) LIKE '%geri dönüş%' OR lower(next_action) LIKE '%rückmeldung%' OR lower(next_action) LIKE '%bekle%' OR lower(next_action) LIKE '%abwarten%' THEN ? ELSE next_action END WHERE id = ?").bind(interviewNextAction, applicationId)] : []),
   ]);
   revalidatePath("/");
 }

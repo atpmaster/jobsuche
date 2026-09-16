@@ -70,6 +70,8 @@ const contentTranslations: Record<string, Translation> = {
   "Gmail yanıtı:": { tr: "Gmail cevabı:", de: "Gmail-Antwort:" },
   "Geri dönüşü kontrol et": { tr: "Geri dönüşü kontrol et", de: "Rückmeldung prüfen" },
   "Geri dönüşü bekle": { tr: "Geri dönüşü bekle", de: "Rückmeldung abwarten" },
+  "Mülakat tarihini ve bağlantısını doğrula; görüşmeye hazırlan": { tr: "Mülakat tarihini ve bağlantısını doğrula; görüşmeye hazırlan", de: "Termin und Gesprächslink bestätigen; auf das Gespräch vorbereiten" },
+  "Termin und Gesprächslink bestätigen; auf das Gespräch vorbereiten": { tr: "Mülakat tarihini ve bağlantısını doğrula; görüşmeye hazırlan", de: "Termin und Gesprächslink bestätigen; auf das Gespräch vorbereiten" },
   "Başvuru teyidini ve açık pozisyonları izle": { tr: "Başvuru teyidini ve açık pozisyonları izle", de: "Eingangsbestätigung und offene Stellen beobachten" },
   "Yanıt için takip tarihi geldiğinde kontrol et": { tr: "Yanıt için takip tarihi geldiğinde kontrol et", de: "Zum Nachfassdatum auf Rückmeldung prüfen" },
   "Eingangsbestätigung prüfen": { tr: "Başvuru alındı teyidini kontrol et", de: "Eingangsbestätigung prüfen" },
