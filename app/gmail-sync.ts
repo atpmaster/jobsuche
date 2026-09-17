@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { isDuplicate, normalize } from "./record-utils";
-import { isConfirmedInterview } from "./interview-utils";
+import { isConfirmedInterview, isRejectionResponse } from "./interview-utils";
 
 type Database = D1Database;
 
@@ -182,6 +182,7 @@ function isAutomatedJobAlert(text: string) {
 }
 
 function responseStatus(text: string) {
+  if (isRejectionResponse(text)) return "rejected";
   return isConfirmedInterview([{ title: text, body: "" }]) && !isAutomatedJobAlert(text) ? "interview" : "received";
 }
 
@@ -290,7 +291,7 @@ async function importReplies(db: Database, state: TokenState, ids: string[], app
       db.prepare("INSERT INTO application_updates (application_id, update_type, title, body, happened_on, gmail_message_id) VALUES (?, 'E-posta', ?, ?, ?, ?)").bind(application.id, `Gmail yanıtı: ${subject}`.slice(0, 250), body || subject, date, id),
       db.prepare("UPDATE applications SET feedback = ?, last_contact_on = ? WHERE id = ?").bind(body || subject, date, application.id),
     ];
-    statements.push(db.prepare("UPDATE applications SET status = ? WHERE id = ?").bind(status, application.id));
+    statements.push(db.prepare("UPDATE applications SET status = ?, next_action = CASE WHEN ? = 'rejected' THEN 'Başka işlem gerekmiyor' ELSE next_action END WHERE id = ?").bind(status, status, application.id));
     await db.batch(statements);
     updates += 1;
   }

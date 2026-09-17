@@ -104,6 +104,38 @@
     box-shadow: 0 0 0 3px #fbe5c2;
   }
 
+  .outcome-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    margin: 0 22px 14px;
+    padding: 9px 12px;
+    background: #fff;
+    border: 1px solid #dce4ee;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 650;
+  }
+
+  .outcome-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .outcome-legend-item i {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+  }
+
+  .interview-legend-item { color: #7b4a16; }
+  .interview-legend-item i { background: #c8751d; box-shadow: 0 0 0 3px #fbe5c2; }
+  .rejection-legend-item { color: #8e252b; }
+  .rejection-legend-item i { background: #a92f35; box-shadow: 0 0 0 3px #f5d1d2; }
+
   .interview-group-banner {
     margin: 0 16px 14px;
     padding: 14px 16px 13px;
@@ -114,6 +146,29 @@
     border-radius: 10px;
     box-shadow: 0 4px 12px rgb(154 85 24 / 13%);
   }
+
+  .rejection-group-banner {
+    margin: 0 16px 14px;
+    padding: 14px 16px 13px;
+    color: #762126;
+    background: linear-gradient(110deg, #ffe9e9 0%, #fffafa 100%);
+    border: 2px solid #c94b50;
+    border-left: 8px solid #a92f35;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgb(169 47 53 / 12%);
+  }
+
+  .rejection-group-title {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .rejection-group-title strong { color: #8e252b; font-size: 15px; letter-spacing: .01em; }
+  .rejection-group-title b { margin-left: auto; padding: 4px 9px; color: #fff; background: #a92f35; border-radius: 999px; font-size: 11px; }
+  .rejection-group-icon { display: inline-grid; width: 25px; height: 25px; place-items: center; color: #fff; background: #a92f35; border-radius: 7px; font-size: 15px; }
+  .rejection-group-banner p { margin: 8px 0 0 33px; color: #8d5a5d; font-size: 12px; line-height: 1.45; }
 
   .interview-group-title {
     display: flex;
@@ -219,6 +274,68 @@
     color: #6e3a05;
     background: #ffe2ad;
     border: 1px solid #dfa04d;
+  }
+
+  .file-entry.has-rejection {
+    position: relative;
+    margin: 14px 12px 18px;
+    overflow: hidden;
+    background: #fff7f7;
+    border: 3px solid #c94b50;
+    border-left: 10px solid #a92f35;
+    border-radius: 12px;
+    box-shadow: 0 5px 16px rgb(169 47 53 / 16%);
+  }
+
+  .file-entry.has-rejection > .file-summary {
+    background: linear-gradient(105deg, #fff0f0 0%, #fffdfd 72%);
+  }
+
+  .file-entry.has-rejection > .file-summary:hover,
+  .file-entry.has-rejection[open] > .file-summary {
+    background: linear-gradient(105deg, #ffe1e2 0%, #fff7f7 72%);
+  }
+
+  .file-entry.has-rejection .file-detail {
+    background: #fffdfd;
+    border-top-color: #edb6b8;
+  }
+
+  .file-entry.has-rejection .file-main > strong {
+    color: #8e252b;
+  }
+
+  .rejection-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    width: max-content;
+    margin-top: 5px;
+    padding: 5px 9px;
+    color: #fff;
+    background: #a92f35;
+    border: 2px solid #8e252b;
+    border-radius: 999px;
+    font: 800 11px/1.2 Arial, sans-serif;
+    letter-spacing: .01em;
+    box-shadow: 0 2px 5px rgb(169 47 53 / 16%);
+  }
+
+  .rejection-badge > span {
+    display: inline-grid;
+    width: 15px;
+    height: 15px;
+    place-items: center;
+    color: #a92f35;
+    background: #fff;
+    border-radius: 50%;
+    font-size: 10px;
+  }
+
+  .file-entry.has-rejection .status-pill.rejected {
+    color: #8e252b;
+    background: #fbe9e7;
+    border: 1px solid #d9898c;
   }
 
   .interview-panel {
@@ -328,11 +445,15 @@
   }
 
   @media (max-width: 700px) {
-    .interview-legend { margin: 0 12px 14px; }
+    .interview-legend, .outcome-legend { margin: 0 12px 14px; }
     .interview-group-banner { margin: 0 10px 12px; padding: 12px; }
+    .rejection-group-banner { margin: 0 10px 12px; padding: 12px; }
     .interview-group-title b { margin-left: 0; }
     .interview-group-banner p { margin-left: 33px; }
+    .rejection-group-title b { margin-left: 0; }
+    .rejection-group-banner p { margin-left: 33px; }
     .file-entry.has-interview { margin: 10px 8px 16px; }
+    .file-entry.has-rejection { margin: 10px 8px 16px; }
     .interview-panel { padding: 14px; }
   }
 }

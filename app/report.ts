@@ -1,7 +1,7 @@
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
 
-export type ReportRow = { company: string; role: string; location: string; date: string; source: string; status: string; next: string };
+export type ReportRow = { company: string; role: string; location: string; date: string; source: string; status: string; statusKey?: string; next: string };
 export async function buildReport(rows: ReportRow[], language: "tr" | "de", date: string, fonts?: string[], profile?: {customerNumber?:string;signature?:boolean;period?:string}) {
   const de = language === "de";
   const doc = new jsPDF({ orientation: "landscape", format: "a4", compress: true });
@@ -30,6 +30,23 @@ export async function buildReport(rows: ReportRow[], language: "tr" | "de", date
     startY: profile?.period ? 56 : 48, margin: { top: profile?.period ? 56 : 48, bottom: profile?.signature ? 35 : 20, left: 14, right: 14 },
     head: [[de ? "Nr." : "No", de ? "Datum der\nBewerbung" : "Başvuru tarihi", de ? "Arbeitgeber / Stelle" : "Kurum / pozisyon", de ? "Quelle / Kanal" : "Kaynak / kanal", de ? "Aktueller Stand" : "Güncel durum", de ? "Nächster Schritt" : "Sonraki adım"]],
     body: rows.map((row, index) => [String(index + 1).padStart(2, "0"), row.date, `${row.company}\n${row.role}${row.location ? `\n${row.location}` : ""}`, row.source, row.status, row.next]),
+    didParseCell: (data) => {
+      if (data.section !== "body" || data.column.index !== 4) return;
+      const status = rows[data.row.index]?.statusKey;
+      const styles: Record<string, { text: [number, number, number]; fill: [number, number, number] }> = {
+        interview: { text: [110, 58, 5], fill: [255, 226, 173] },
+        rejected: { text: [145, 36, 39], fill: [251, 233, 231] },
+        received: { text: [114, 80, 169], fill: [240, 234, 255] },
+        waiting: { text: [38, 115, 77], fill: [230, 243, 233] },
+        sent: { text: [38, 115, 77], fill: [230, 243, 233] },
+      };
+      const style = status ? styles[status] : undefined;
+      if (style) {
+        data.cell.styles.textColor = style.text;
+        data.cell.styles.fillColor = style.fill;
+        data.cell.styles.fontStyle = "bold";
+      }
+    },
     theme: "plain", showHead: "everyPage", rowPageBreak: "avoid",
     styles: { font: reportFont, fontSize: 9, cellPadding: profile?.period ? 2.2 : 3.2, textColor: [35, 47, 64], lineColor: [222, 228, 235], lineWidth: { bottom: 0.15 }, overflow: "linebreak", valign: "top" },
     headStyles: { fillColor: [23, 43, 67], textColor: 255, fontStyle: "bold", fontSize: 8.5 },

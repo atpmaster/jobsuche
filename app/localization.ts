@@ -13,7 +13,7 @@ export const statusLabels: Record<Language, Record<string, string>> = {
     applied: "Cevap bekleniyor",
     interview: "Mülakat daveti geldi",
     offer: "Cevap geldi",
-    rejected: "Cevap geldi",
+    rejected: "Ret / olumsuz cevap",
   },
   de: {
     new: "Neue Bewerbung",
@@ -27,7 +27,7 @@ export const statusLabels: Record<Language, Record<string, string>> = {
     applied: "Rückmeldung ausstehend",
     interview: "Vorstellungsgespräch-Einladung erhalten",
     offer: "Rückmeldung erhalten",
-    rejected: "Rückmeldung erhalten",
+    rejected: "Absage / negative Rückmeldung",
   },
 };
 

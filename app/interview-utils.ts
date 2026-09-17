@@ -2,6 +2,14 @@ export type InterviewUpdateLike = { title?: string | null; body?: string | null 
 export type InterviewDetails = { date: string; time: string };
 
 const invitationWords = /(vorstellungsgespräch|persönlichen gespräch|persönliches gespräch|zum gespräch|laden wir sie .* ein|termin bestätigen|mülakat|görüşme daveti|görüşmeye davet|görüşmeye çağır)/i;
+const rejectionWords = [
+  /\babsage\b/i,
+  /\b(?:nicht|keine)\b.{0,80}\b(?:engere auswahl|auswahl|berücksichtigt|beruecksichtigt|positive nachricht|nehmen)\b/i,
+  /\bleider\b.{0,100}\bmitteilen\b/i,
+  /\bstelle bereits besetzt\b/i,
+  /\b(?:bewerbung|bewerber)\b.{0,60}\b(?:abgelehnt|nicht berücksichtigt|nicht beruecksichtigt)\b/i,
+  /\b(?:olumsuz|reddedildi|kabul edilmedi|başka bir aday)\b/i,
+];
 
 function normalizeDate(day: string, month: string, year: string) {
   return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
@@ -48,6 +56,10 @@ export function getInterviewDetails(updates: InterviewUpdateLike[], startsAt?: s
 
 export function isConfirmedInterview(updates: InterviewUpdateLike[], startsAt?: string | null) {
   return Boolean(getInterviewDetails(updates, startsAt));
+}
+
+export function isRejectionResponse(value: string) {
+  return rejectionWords.some((pattern) => pattern.test(value));
 }
 
 export function formatInterviewDetails(details: InterviewDetails | null, language: "tr" | "de") {
