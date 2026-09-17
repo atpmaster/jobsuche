@@ -158,7 +158,7 @@ function translate(value: string, language: Language, translations: Record<strin
 // an untranslated value leak into a localized page or report. Known texts are
 // translated above; this guard is the final boundary for newly imported text.
 const turkishMarkers = /(başvuru|gönderildi|gönderilen|e-posta|geri dönüş|bekleniyor|tarihinde|sonradan|teyidi|portalda|siber güvenlik|birleştirilmiş|başlangıç|kontrol edilecek|üzerinden|eklendi|otomatik|alındı)/i;
-const germanMarkers = /(bewerbung|bewerbungs|gesendet|rückmeldung|eingangsbestätigung|nachgereicht|prüfen|prüfe|kontrollieren|abwarten|erhalten|e-mail|karriereportal|stellennummer|unterlagen|automatisch|vorstellungsgespräch|einladung|termin|gespräch|unbekannter|deutscher|\bder\b|\bdie\b|\bdas\b|\bund\b|\bfür\b|\bmit\b|\beine?\b|\bist\b|\bwurde\b|\bwerden\b)/i;
+const germanMarkers = /(bewerbung|bewerbungs|gesendet|rückmeldung|eingangsbestätigung|nachgereicht|prüfen|prüfe|kontrollieren|abwarten|erhalten|e-mail|karriereportal|stellennummer|unterlagen|automatisch|vorstellungsgespräch|einladung|termin|gespräch|unbekannter|deutscher|einbürgerung|familie|vorabfrage|\bzur\b|\bihre?r?\b|\bauf\b|\bder\b|\bdie\b|\bdas\b|\bund\b|\bfür\b|\bmit\b|\beine?\b|\bist\b|\bwurde\b|\bwerden\b)/i;
 
 function hasForeignLanguage(value: string, language: Language) {
   return language === "de" ? turkishMarkers.test(value) : germanMarkers.test(value);
@@ -198,6 +198,22 @@ export function localizedSource(value: string | null | undefined, language: Lang
 
 export function localizedContent(value: string | null | undefined, language: Language) {
   if (!value) return value;
+  const gmailReply = value.match(/^Gmail yanıtı:\s*(.+)$/i);
+  if (gmailReply) {
+    return ensureLanguage(
+      language === "de" ? `Gmail-Antwort: ${gmailReply[1]}` : `Gmail cevabı: ${gmailReply[1]}`,
+      language,
+      language === "de" ? "Gmail-Antwort eingegangen." : "Gmail cevabı alındı.",
+    );
+  }
+  const gmailReplyDe = value.match(/^Gmail-Antwort:\s*(.+)$/i);
+  if (gmailReplyDe) {
+    return ensureLanguage(
+      language === "de" ? value : `Gmail cevabı: ${gmailReplyDe[1]}`,
+      language,
+      language === "de" ? "Gmail-Antwort eingegangen." : "Gmail cevabı alındı.",
+    );
+  }
   const gmailNote = value.match(/^Gmail'den otomatik aktarıldı\. E-posta konusu: (.+)$/);
   if (gmailNote) {
     return ensureLanguage(language === "de"
