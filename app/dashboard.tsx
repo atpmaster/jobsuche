@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { isDuplicate, normalize } from "./record-utils";
 import { restoreApplication } from "./actions";
 import { LiveRefresh } from "./live-refresh";
-import { localizedContent, localizedSource, statusLabels, type Language } from "./localization";
+import { localizedContent, localizedLabel, localizedSource, statusLabels, type Language } from "./localization";
 import { formatInterviewDetails, getInterviewDetails, isConfirmedInterview } from "./interview-utils";
 import { InterviewSimulator } from "./interview-simulator";
 
@@ -73,7 +73,7 @@ function localizedStep(label: string, language: Language) {
     "Geri dönüşü kaydet": { tr: "Geri dönüşü kaydet", de: "Rückmeldung dokumentieren" },
     "Rückmeldung dokumentieren": { tr: "Geri dönüşü kaydet", de: "Rückmeldung dokumentieren" },
   };
-  return translations[label]?.[language] ?? label;
+  return localizedLabel(translations[label]?.[language] ?? label, language, language === "de" ? "Bewerbungsschritt" : "Başvuru adımı") || (language === "de" ? "Bewerbungsschritt" : "Başvuru adımı");
 }
 
 function localizedTask(value: string, language: Language) {
@@ -85,7 +85,7 @@ function localizedTask(value: string, language: Language) {
     "Almanca mülakat cevabını sesli prova et": { tr: value, de: "Antwort für Vorstellungsgespräch auf Deutsch üben" },
     "Antwort für Vorstellungsgespräch auf Deutsch üben": { tr: "Almanca mülakat cevabını sesli prova et", de: value },
   };
-  return translations[value]?.[language] ?? value;
+  return localizedLabel(translations[value]?.[language] ?? value, language, language === "de" ? "Weitere Aufgabe" : "Diğer görev") || (language === "de" ? "Weitere Aufgabe" : "Diğer görev");
 }
 
 function localizedCategory(value: string, language: Language) {
@@ -95,7 +95,7 @@ function localizedCategory(value: string, language: Language) {
     Almanca: { tr: "Almanca", de: "Deutsch" }, Deutsch: { tr: "Almanca", de: "Deutsch" },
     Kariyer: { tr: "Kariyer", de: "Karriere" }, Karriere: { tr: "Kariyer", de: "Karriere" },
   };
-  return translations[value]?.[language] ?? value;
+  return localizedLabel(translations[value]?.[language] ?? value, language, language === "de" ? "Sonstige" : "Diğer") || (language === "de" ? "Sonstige" : "Diğer");
 }
 
 function isReportNoise(application: Application) {
