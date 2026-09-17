@@ -69,6 +69,43 @@
     color: var(--orange);
   }
 
+  .toolbar-stats > .toolbar-stat-link.interview-stat {
+    color: #7b4a16;
+    background: #fff4df;
+    border-color: #efc477;
+  }
+
+  .toolbar-stats > .toolbar-stat-link.interview-stat strong {
+    color: #7b4a16;
+  }
+
+  .toolbar-stats > .toolbar-stat-link.rejection-stat {
+    color: #922327;
+    background: #fff1f1;
+    border-color: #e0a3a3;
+  }
+
+  .toolbar-stats > .toolbar-stat-link.rejection-stat strong {
+    color: #922327;
+  }
+
+  .toolbar-stats > .toolbar-stat-link.interview-stat.is-selected {
+    color: #fff;
+    background: #c87812;
+    border-color: #c87812;
+  }
+
+  .toolbar-stats > .toolbar-stat-link.rejection-stat.is-selected {
+    color: #fff;
+    background: #922327;
+    border-color: #922327;
+  }
+
+  .toolbar-stats > .toolbar-stat-link.interview-stat.is-selected strong,
+  .toolbar-stats > .toolbar-stat-link.rejection-stat.is-selected strong {
+    color: #fff;
+  }
+
   .toolbar-stats > .toolbar-stat-link:last-child {
     display: flex;
   }
