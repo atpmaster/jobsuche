@@ -284,7 +284,7 @@ export function Dashboard({ applications: allApplications, tasks, today, career,
       name.style.cssText = "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
       const saveButton = document.createElement("button");
       saveButton.type = "button";
-      saveButton.textContent = language === "de" ? "PDF speichern" : "PDF'yi kaydet";
+       saveButton.textContent = language === "de" ? "PDF herunterladen" : "PDF'yi indir";
       saveButton.style.cssText = "margin-left:auto;border:0;border-radius:7px;background:#1b5db9;color:#fff;padding:8px 12px;cursor:pointer;font:600 13px system-ui,sans-serif;";
       const closeButton = document.createElement("button");
       closeButton.type = "button";
@@ -296,7 +296,7 @@ export function Dashboard({ applications: allApplications, tasks, today, career,
       toolbar.append(title, name, saveButton, closeButton, status);
 
       const frame = document.createElement("iframe");
-      frame.src = pdfUrl;
+       frame.src = `${pdfUrl}#toolbar=0&navpanes=0`;
       frame.title = fileName;
       frame.style.cssText = "flex:1;width:100%;border:0;background:#fff;";
 
