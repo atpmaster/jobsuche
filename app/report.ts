@@ -1,9 +1,13 @@
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
 
-export type ReportRow = { company: string; role: string; location: string; date: string; source: string; status: string; next: string };
+export type ReportRow = { company: string; role: string; location: string; date: string; source: string; status: string; statusKey?: string; next: string };
 export async function buildReport(rows: ReportRow[], language: "tr" | "de", date: string, fonts?: string[], profile?: {customerNumber?:string;signature?:boolean;period?:string}) {
   const de = language === "de";
+  const fileStem = de ? "Ahmet Tepe Bewerbungsnachweis" : "Ahmet Tepe Başvuru Takip";
+  const interviewCount = rows.filter((row) => row.statusKey === "interview").length;
+  const rejectedRows = rows.filter((row) => row.statusKey === "rejected");
+  const waitingCount = rows.filter((row) => row.statusKey === "waiting").length;
   const doc = new jsPDF({ orientation: "landscape", format: "a4", compress: true });
   let reportFont = "helvetica";
   try {
@@ -25,17 +29,48 @@ export async function buildReport(rows: ReportRow[], language: "tr" | "de", date
     // Keep the report usable if a browser blocks the optional web-font download.
     // jsPDF's built-in Helvetica covers German umlauts and still produces a valid PDF.
   }
-  doc.setProperties({ title: de ? "Bewerbungsnachweis - Ahmet Tepe" : "Başvuru Raporu - Ahmet Tepe", author: "Ahmet Tepe" });
+  doc.setProperties({ title: fileStem, subject: de ? "Bewerbungsaktivitäten und Rückmeldungen" : "Başvuru faaliyetleri ve geri dönüşler", author: "Ahmet Tepe" });
   autoTable(doc, {
-    startY: profile?.period ? 56 : 48, margin: { top: profile?.period ? 56 : 48, bottom: profile?.signature ? 35 : 20, left: 14, right: 14 },
+    startY: 64, margin: { top: 64, bottom: profile?.signature ? 35 : 20, left: 14, right: 14 },
     head: [[de ? "Nr." : "No", de ? "Datum der\nBewerbung" : "Başvuru tarihi", de ? "Arbeitgeber / Stelle" : "Kurum / pozisyon", de ? "Quelle / Kanal" : "Kaynak / kanal", de ? "Aktueller Stand" : "Güncel durum", de ? "Nächster Schritt" : "Sonraki adım"]],
     body: rows.map((row, index) => [String(index + 1).padStart(2, "0"), row.date, `${row.company}\n${row.role}${row.location ? `\n${row.location}` : ""}`, row.source, row.status, row.next]),
+    didParseCell: (data) => {
+      if (data.section !== "body" || data.column.index !== 4) return;
+      const status = rows[data.row.index]?.statusKey;
+      const styles: Record<string, { text: [number, number, number]; fill: [number, number, number] }> = {
+        interview: { text: [110, 58, 5], fill: [255, 226, 173] },
+        rejected: { text: [145, 36, 39], fill: [251, 233, 231] },
+        received: { text: [114, 80, 169], fill: [240, 234, 255] },
+        waiting: { text: [38, 115, 77], fill: [230, 243, 233] },
+        sent: { text: [38, 115, 77], fill: [230, 243, 233] },
+      };
+      const style = status ? styles[status] : undefined;
+      if (style) {
+        data.cell.styles.textColor = style.text;
+        data.cell.styles.fillColor = style.fill;
+        data.cell.styles.fontStyle = "bold";
+      }
+    },
     theme: "plain", showHead: "everyPage", rowPageBreak: "avoid",
     styles: { font: reportFont, fontSize: 9, cellPadding: profile?.period ? 2.2 : 3.2, textColor: [35, 47, 64], lineColor: [222, 228, 235], lineWidth: { bottom: 0.15 }, overflow: "linebreak", valign: "top" },
     headStyles: { fillColor: [23, 43, 67], textColor: 255, fontStyle: "bold", fontSize: 8.5 },
     alternateRowStyles: { fillColor: [245, 248, 251] },
     columnStyles: { 0: { cellWidth: 12 }, 1: { cellWidth: 29 }, 2: { cellWidth: 86 }, 3: { cellWidth: 39 }, 4: { cellWidth: 37 }, 5: { cellWidth: 66 } },
   });
+  if (rejectedRows.length) {
+    const rejectionTitle = de ? "Absagen / negative Rückmeldungen" : "Ret / olumsuz cevaplar";
+    autoTable(doc, {
+      startY: (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ? (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 9 : 64,
+      margin: { top: 64, bottom: profile?.signature ? 35 : 20, left: 14, right: 14 },
+      head: [[rejectionTitle]],
+      body: rejectedRows.map((row) => [`${row.company}\n${row.role}${row.location ? `\n${row.location}` : ""}`]),
+      theme: "plain",
+      styles: { font: reportFont, fontSize: 9, cellPadding: 3.5, textColor: [145, 36, 39], lineColor: [224, 163, 163], lineWidth: { bottom: 0.25 }, overflow: "linebreak", valign: "top" },
+      headStyles: { fillColor: [145, 36, 39], textColor: 255, fontStyle: "bold", fontSize: 9 },
+      bodyStyles: { fillColor: [251, 233, 231], textColor: [145, 36, 39], fontStyle: "bold" },
+      columnStyles: { 0: { cellWidth: 269 } },
+    });
+  }
   const total = doc.getNumberOfPages();
   for (let page = 1; page <= total; page++) {
     doc.setPage(page);
@@ -60,6 +95,10 @@ export async function buildReport(rows: ReportRow[], language: "tr" | "de", date
     doc.text(`${rows.length} ${de ? "dokumentierte Einträge" : "kayıt"}  |  ${de ? "Zur Vorlage beim Jobcenter" : "Jobcenter'a sunulmak üzere"}`, 14, 41);
     if(profile?.customerNumber) {doc.setFontSize(8);doc.text(`${de?"Kundennummer":"Müşteri no"}: ${profile.customerNumber.slice(0,40)}`,283,41,{align:"right"});}
     if(profile?.period) {doc.setFontSize(8);doc.text(doc.splitTextToSize(profile.period,269),14,48);}
+    doc.setFont(reportFont, "bold"); doc.setFontSize(8);
+    doc.setTextColor(110, 58, 5); doc.text(`${de ? "Vorstellungsgespräch" : "Mülakat daveti"}: ${interviewCount}`, 14, 56);
+    doc.setTextColor(145, 36, 39); doc.text(`${de ? "Absagen" : "Ret / olumsuz"}: ${rejectedRows.length}`, 86, 56);
+    doc.setTextColor(38, 115, 77); doc.text(`${de ? "Rückmeldung ausstehend" : "Yanıt bekleyen"}: ${waitingCount}`, 158, 56);
     if(profile?.signature && page===total) {doc.setDrawColor(110,120,130);doc.setLineWidth(0.2);doc.line(180,183,283,183);doc.setFontSize(8);doc.text(de?"Ort, Datum, Unterschrift":"Yer, tarih, imza",180,188);}
     doc.setDrawColor(210, 220, 230); doc.setLineWidth(0.2); doc.line(14, 194, 283, 194);
     doc.setFontSize(8);

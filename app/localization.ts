@@ -13,7 +13,7 @@ export const statusLabels: Record<Language, Record<string, string>> = {
     applied: "Cevap bekleniyor",
     interview: "Mülakat daveti geldi",
     offer: "Cevap geldi",
-    rejected: "Cevap geldi",
+    rejected: "Ret / olumsuz cevap",
   },
   de: {
     new: "Neue Bewerbung",
@@ -27,7 +27,7 @@ export const statusLabels: Record<Language, Record<string, string>> = {
     applied: "Rückmeldung ausstehend",
     interview: "Vorstellungsgespräch-Einladung erhalten",
     offer: "Rückmeldung erhalten",
-    rejected: "Rückmeldung erhalten",
+    rejected: "Absage / negative Rückmeldung",
   },
 };
 
@@ -47,6 +47,8 @@ const sourceTranslations: Record<string, Translation> = {
   "Başvuru yönetimi": { tr: "Başvuru yönetimi", de: "Bewerbermanagement" },
   "Bewerbermanagement": { tr: "Başvuru yönetimi", de: "Bewerbermanagement" },
   "Karriereportal": { tr: "Kariyer portalı", de: "Karriereportal" },
+  "ESE-Karriereportal": { tr: "ESE kariyer portalı", de: "ESE-Karriereportal" },
+  "ESE kariyer portalı": { tr: "ESE kariyer portalı", de: "ESE-Karriereportal" },
 };
 
 const contentTranslations: Record<string, Translation> = {
@@ -62,6 +64,11 @@ const contentTranslations: Record<string, Translation> = {
   "Bewerbungsbogen und Unterlagen versendet": { tr: "Başvuru formu ve belgeler gönderildi", de: "Bewerbungsbogen und Unterlagen versendet" },
   "Bewerbung aus Gmail importiert": { tr: "Başvuru Gmail'den aktarıldı", de: "Bewerbung aus Gmail importiert" },
   "Başvuru alındı teyidi anfordern": { tr: "Başvuru alındı teyidini iste", de: "Eingangsbestätigung anfordern" },
+  "Başvuru alındı teyidini kontrol et": { tr: "Başvuru alındı teyidini kontrol et", de: "Eingangsbestätigung prüfen" },
+  "Nicht weiterverfolgen": { tr: "Başka işlem gerekmiyor", de: "Nicht weiterverfolgen" },
+  "Başka işlem gerekmiyor": { tr: "Başka işlem gerekmiyor", de: "Keine weitere Aktion" },
+  "geri dönüş takip et": { tr: "Geri dönüşü takip et", de: "Rückmeldung nachfassen" },
+  "Geri dönüşü takip et": { tr: "Geri dönüşü takip et", de: "Rückmeldung nachfassen" },
   "Fehlende Bewerbungsunterlagen nachreichen": { tr: "Eksik başvuru belgelerini sonradan gönder", de: "Fehlende Bewerbungsunterlagen nachreichen" },
   "geri dönüş nachfassen": { tr: "Geri dönüşü takip et", de: "Rückmeldung nachfassen" },
   "Keine weitere Aktion – Stelle bereits besetzt": { tr: "Başka işlem gerekmiyor – pozisyon doldu", de: "Keine weitere Aktion – Stelle bereits besetzt" },
@@ -90,6 +97,14 @@ const contentTranslations: Record<string, Translation> = {
   "Rückmeldung nach der Auswahlprüfung abwarten": { tr: "Seçim incelemesinden sonra geri dönüşü bekle", de: "Rückmeldung nach der Auswahlprüfung abwarten" },
   "Keine weitere Aktion – direkter Bewerbungsweg nicht möglich": { tr: "Başka işlem gerekmiyor – doğrudan başvuru yolu mümkün değil", de: "Keine weitere Aktion – direkter Bewerbungsweg nicht möglich" },
   "04.09.2026: Schule informiert, dass es sich um eine Förderschule handelt": { tr: "04.09.2026: Okul, buranın bir destek okulu olduğunu bildirdi.", de: "04.09.2026: Schule informiert, dass es sich um eine Förderschule handelt" },
+  "17.09.2026 tarihinde ESE kariyer portalı üzerinden başvuru gönderildi. Siber güvenlik CV’si ve birleştirilmiş başvuru PDF’si eklendi. Başlangıç tarihi 21.09.2026; 24.09.2026 tarihinde başvuru teyidi kontrol edilecek.": {
+    tr: "17.09.2026 tarihinde ESE kariyer portalı üzerinden başvuru gönderildi. Siber güvenlik CV’si ve birleştirilmiş başvuru PDF’si eklendi. Başlangıç tarihi 21.09.2026; 24.09.2026 tarihinde başvuru teyidi kontrol edilecek.",
+    de: "Die Bewerbung wurde am 17.09.2026 über das ESE-Karriereportal versendet. Der Cybersecurity-Lebenslauf und die zusammengeführte Bewerbungsmappe wurden beigefügt. Gewünschter Eintrittstermin ist der 21.09.2026; am 24.09.2026 wird die Eingangsbestätigung geprüft.",
+  },
+  "Die Bewerbung wurde am 17.09.2026 über das ESE-Karriereportal versendet. Der Cybersecurity-Lebenslauf und die zusammengeführte Bewerbungsmappe wurden beigefügt. Gewünschter Eintrittstermin ist der 21.09.2026; am 24.09.2026 wird die Eingangsbestätigung geprüft.": {
+    tr: "17.09.2026 tarihinde ESE kariyer portalı üzerinden başvuru gönderildi. Siber güvenlik CV’si ve birleştirilmiş başvuru PDF’si eklendi. Başlangıç tarihi 21.09.2026; 24.09.2026 tarihinde başvuru teyidi kontrol edilecek.",
+    de: "Die Bewerbung wurde am 17.09.2026 über das ESE-Karriereportal versendet. Der Cybersecurity-Lebenslauf und die zusammengeführte Bewerbungsmappe wurden beigefügt. Gewünschter Eintrittstermin ist der 21.09.2026; am 24.09.2026 wird die Eingangsbestätigung geprüft.",
+  },
 };
 
 const fallbackReplacements: Array<[RegExp, string, string]> = [
@@ -139,6 +154,26 @@ function translate(value: string, language: Language, translations: Record<strin
   return fallbackReplacements.reduce((result, [pattern, tr, de]) => result.replace(pattern, language === "tr" ? tr : de), value);
 }
 
+// Free-form notes and Gmail text can arrive in the other language. Never let
+// an untranslated value leak into a localized page or report. Known texts are
+// translated above; this guard is the final boundary for newly imported text.
+const turkishMarkers = /(başvuru|gönderildi|gönderilen|e-posta|geri dönüş|bekleniyor|tarihinde|sonradan|teyidi|portalda|siber güvenlik|birleştirilmiş|başlangıç|kontrol edilecek|üzerinden|eklendi|otomatik|alındı)/i;
+const germanMarkers = /(bewerbung|bewerbungs|gesendet|rückmeldung|eingangsbestätigung|nachgereicht|prüfen|prüfe|kontrollieren|abwarten|erhalten|e-mail|karriereportal|stellennummer|unterlagen|automatisch|vorstellungsgespräch|einladung|termin|gespräch|unbekannter|deutscher|einbürgerung|familie|vorabfrage|\bzur\b|\bihre?r?\b|\bauf\b|\bder\b|\bdie\b|\bdas\b|\bund\b|\bfür\b|\bmit\b|\beine?\b|\bist\b|\bwurde\b|\bwerden\b)/i;
+
+function hasForeignLanguage(value: string, language: Language) {
+  return language === "de" ? turkishMarkers.test(value) : germanMarkers.test(value);
+}
+
+function languageFallback(language: Language) {
+  return language === "de"
+    ? "Weitere Angaben zur Bewerbung sind im System hinterlegt."
+    : "Başvuruya ilişkin ek bilgiler sisteme kaydedildi.";
+}
+
+function ensureLanguage(value: string, language: Language, fallback?: string) {
+  return hasForeignLanguage(value, language) ? (fallback || languageFallback(language)) : value;
+}
+
 function translateMixedContent(value: string, language: Language) {
   const hasTurkish = /(başvuru|gönderildi|e-posta|geri dönüş|bekleniyor|tarihinde|sonradan|teyidi|portalda)/i.test(value);
   const hasGerman = /(bewerbung|gesendet|e-mail|rückmeldung|steht|\beine\b|\bam\s+\d|nachgereicht|eingangsbestätigung|initiativbewerbung)/i.test(value);
@@ -154,11 +189,45 @@ function translateMixedContent(value: string, language: Language) {
 
 export function localizedSource(value: string | null | undefined, language: Language) {
   if (!value) return value;
-  return translate(value, language, sourceTranslations);
+  value = value.trim();
+  return ensureLanguage(
+    translate(value, language, sourceTranslations),
+    language,
+    language === "de" ? "Bewerbungsquelle" : "Başvuru kaynağı",
+  );
 }
 
 export function localizedContent(value: string | null | undefined, language: Language) {
   if (!value) return value;
+  value = value.trim();
+  const gmailReply = value.match(/^Gmail yanıtı:\s*(.+)$/i);
+  if (gmailReply) {
+    return ensureLanguage(
+      language === "de" ? `Gmail-Antwort: ${gmailReply[1]}` : `Gmail cevabı: ${gmailReply[1]}`,
+      language,
+      language === "de" ? "Gmail-Antwort eingegangen." : "Gmail cevabı alındı.",
+    );
+  }
+  const gmailReplyDe = value.match(/^Gmail-Antwort:\s*(.+)$/i);
+  if (gmailReplyDe) {
+    return ensureLanguage(
+      language === "de" ? value : `Gmail cevabı: ${gmailReplyDe[1]}`,
+      language,
+      language === "de" ? "Gmail-Antwort eingegangen." : "Gmail cevabı alındı.",
+    );
+  }
+  const gmailNote = value.match(/^Gmail'den otomatik aktarıldı\. E-posta konusu: (.+)$/);
+  if (gmailNote) {
+    return ensureLanguage(language === "de"
+      ? `Automatisch aus Gmail importiert. E-Mail-Betreff: ${gmailNote[1]}`
+      : `Gmail'den otomatik aktarıldı. E-posta konusu: ${gmailNote[1]}`, language);
+  }
+  const gmailNoteDe = value.match(/^Automatisch aus Gmail importiert\. E-Mail-Betreff: (.+)$/);
+  if (gmailNoteDe) {
+    return ensureLanguage(language === "de"
+      ? value
+      : `Gmail'den otomatik aktarıldı. E-posta konusu: ${gmailNoteDe[1]}`, language);
+  }
   const mixed = translateMixedContent(value, language);
   if (mixed) return mixed;
   if (value.includes("Stellennummer 18049-26")) {
@@ -170,5 +239,10 @@ export function localizedContent(value: string | null | undefined, language: Lan
   if (statusTitle) return `${language === "de" ? "Status" : "Durum"}: ${statusLabels[language][statusTitle[1]]}`;
   const statusBody = value.match(/^Başvuru durumu (new|listed|sent|waiting|received|saved|preparing|applied|interview|offer|rejected|withdrawn) olarak güncellendi\.$/);
   if (statusBody) return language === "de" ? `Bewerbungsstatus auf ${statusLabels.de[statusBody[1]]} aktualisiert.` : `Başvuru durumu ${statusLabels.tr[statusBody[1]].toLowerCase()} olarak güncellendi.`;
-  return translate(value, language, contentTranslations);
+  return ensureLanguage(translate(value, language, contentTranslations), language);
+}
+
+export function localizedLabel(value: string | null | undefined, language: Language, fallback?: string) {
+  if (!value) return fallback;
+  return ensureLanguage(translate(value, language, contentTranslations), language) || fallback;
 }

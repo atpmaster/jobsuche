@@ -6,7 +6,7 @@ import { isDuplicate } from "./record-utils";
 import { getCareerData } from "./career-actions";
 import { syncGmailApplications } from "./gmail-sync";
 import { GMAIL_SESSION_COOKIE } from "./gmail-session";
-import { isConfirmedInterview } from "./interview-utils";
+import { isConfirmedInterview, isRejectionResponse } from "./interview-utils";
 import { cookies } from "next/headers";
 
 type Application = {
@@ -39,6 +39,7 @@ type Task = { id: number; title: string; category: string; estimate: string; don
 // records are migrated below, so older forms cannot corrupt an application.
 const statuses = new Set(["new", "listed", "sent", "waiting", "received", "withdrawn", "saved", "preparing", "applied", "interview", "offer", "rejected"]);
 const interviewNextAction = "Mülakat tarihini ve bağlantısını doğrula; görüşmeye hazırlan";
+const rejectionNextAction = "Başka işlem gerekmiyor";
 const waitingNextAction = "Geri dönüşü bekle";
 const genericWaitingActionPattern = /(geri dönüş|rückmeldung|eingangsbestätigung|bekle|abwarten|prüf|kontroll)/i;
 const canonicalStatus = (value: string) => ({
@@ -46,11 +47,11 @@ const canonicalStatus = (value: string) => ({
   preparing: "listed",
   applied: "waiting",
   offer: "received",
-  rejected: "received",
 }[value] ?? value);
 
 function nextActionForStatus(status: string, value: string | null) {
   const action = value?.trim() ?? "";
+  if (status === "rejected") return rejectionNextAction;
   if (status === "interview" && (!action || genericWaitingActionPattern.test(action))) return interviewNextAction;
   return action || null;
 }
@@ -109,10 +110,19 @@ async function prepareDb() {
     db.prepare("UPDATE applications SET status = 'new' WHERE status = 'saved'"),
     db.prepare("UPDATE applications SET status = 'listed' WHERE status = 'preparing'"),
     db.prepare("UPDATE applications SET status = 'waiting' WHERE status = 'applied'"),
-    db.prepare("UPDATE applications SET status = 'received' WHERE status IN ('offer', 'rejected')"),
+    db.prepare("UPDATE applications SET status = 'received' WHERE status = 'offer'"),
     db.prepare("UPDATE applications SET status = 'received' WHERE status IN ('new', 'listed', 'sent', 'waiting') AND id IN (SELECT application_id FROM application_updates WHERE title LIKE 'Gmail yanıtı:%')"),
     db.prepare("UPDATE applications SET next_action = ? WHERE status = 'interview' AND (next_action IS NULL OR lower(next_action) LIKE '%geri dönüş%' OR lower(next_action) LIKE '%rückmeldung%' OR lower(next_action) LIKE '%bekle%' OR lower(next_action) LIKE '%abwarten%' OR lower(next_action) LIKE '%eingangsbestätigung%')").bind(interviewNextAction),
   ]);
+
+  // Older versions stored every non-interview reply as `received`. Promote
+  // clear rejection replies so the result is visible without opening a row.
+  const responseRows = await db.prepare("SELECT id, feedback FROM applications WHERE status = 'received' AND feedback IS NOT NULL")
+    .all<{ id: number; feedback: string | null }>();
+  const rejectionRepairs = responseRows.results
+    .filter((row) => isRejectionResponse(row.feedback || ""))
+    .map((row) => db.prepare("UPDATE applications SET status = 'rejected', next_action = ? WHERE id = ?").bind(rejectionNextAction, row.id));
+  if (rejectionRepairs.length) await db.batch(rejectionRepairs);
 
   // An interview is shown only when a concrete date and time are present in
   // the invitation text. This also repairs older false positives created by
@@ -318,7 +328,8 @@ export async function updateApplicationStatus(formData: FormData) {
   const requestedCanonicalStatus = canonicalStatus(requestedStatus);
   const id = Number(formData.get("id"));
   const status = requestedCanonicalStatus === "interview" && !(await hasConfirmedInterview(db, id)) ? "waiting" : requestedCanonicalStatus;
-  await db.prepare("UPDATE applications SET status = ?, next_action = CASE WHEN ? = 'interview' AND (next_action IS NULL OR lower(next_action) LIKE '%geri dönüş%' OR lower(next_action) LIKE '%rückmeldung%' OR lower(next_action) LIKE '%bekle%' OR lower(next_action) LIKE '%abwarten%') THEN ? ELSE next_action END, last_contact_on = CASE WHEN ? IN ('received', 'interview') THEN CURRENT_DATE ELSE last_contact_on END WHERE id = ?").bind(status, status, status === "interview" ? interviewNextAction : null, status, id).run();
+  const nextAction = nextActionForStatus(status, null);
+  await db.prepare("UPDATE applications SET status = ?, next_action = CASE WHEN ? IN ('rejected', 'interview') THEN ? ELSE next_action END, last_contact_on = CASE WHEN ? IN ('received', 'interview', 'rejected') THEN CURRENT_DATE ELSE last_contact_on END WHERE id = ?").bind(status, status, nextAction, status, id).run();
   await db.prepare("INSERT INTO application_updates (application_id, update_type, title, body) VALUES (?, 'Durum', ?, ?)").bind(id, `Durum: ${status}`, `Başvuru durumu ${status} olarak güncellendi.`).run();
   revalidatePath("/");
 }
@@ -364,10 +375,11 @@ export async function addApplicationUpdate(formData: FormData) {
   const updateType = String(formData.get("updateType") || "Not");
   const body = String(formData.get("body") || "");
   const hasInterviewInvitation = isConfirmedInterview([{ title, body }]);
+  const hasRejection = isRejectionResponse(`${title} ${body}`);
   await db.batch([
     db.prepare("INSERT INTO application_updates (application_id, update_type, title, body, happened_on) VALUES (?, ?, ?, ?, ?)").bind(applicationId, updateType, title, body || null, date),
     db.prepare("UPDATE applications SET feedback = ?, last_contact_on = ? WHERE id = ?").bind(body || title, date, applicationId),
-    ...(hasInterviewInvitation ? [db.prepare("UPDATE applications SET status = 'interview', next_action = CASE WHEN next_action IS NULL OR lower(next_action) LIKE '%geri dönüş%' OR lower(next_action) LIKE '%rückmeldung%' OR lower(next_action) LIKE '%bekle%' OR lower(next_action) LIKE '%abwarten%' THEN ? ELSE next_action END WHERE id = ?").bind(interviewNextAction, applicationId)] : []),
+    ...(hasRejection ? [db.prepare("UPDATE applications SET status = 'rejected', next_action = ? WHERE id = ?").bind(rejectionNextAction, applicationId)] : hasInterviewInvitation ? [db.prepare("UPDATE applications SET status = 'interview', next_action = CASE WHEN next_action IS NULL OR lower(next_action) LIKE '%geri dönüş%' OR lower(next_action) LIKE '%rückmeldung%' OR lower(next_action) LIKE '%bekle%' OR lower(next_action) LIKE '%abwarten%' THEN ? ELSE next_action END WHERE id = ?").bind(interviewNextAction, applicationId)] : []),
   ]);
   revalidatePath("/");
 }
