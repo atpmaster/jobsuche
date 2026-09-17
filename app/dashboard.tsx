@@ -337,10 +337,22 @@ export function Dashboard({ applications: allApplications, tasks, today, career,
     } finally { setPdfBusy(false); }
   };
   const openApplication = (id: number) => {
-    const element = document.getElementById(`app-${id}`) as HTMLDetailsElement | null;
-    if (!element) return;
-    element.open = true;
-    element.scrollIntoView({ behavior: "smooth", block: "center" });
+    const reveal = () => {
+      const element = document.getElementById(`app-${id}`) as HTMLDetailsElement | null;
+      if (!element) return;
+      element.open = true;
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+      (element.querySelector("summary") as HTMLElement | null)?.focus({ preventScroll: true });
+    };
+
+    // Follow-up alerts stay visible while a search/filter can hide their row.
+    // Clear the view first, then reveal after React has rendered the full list.
+    if (!document.getElementById(`app-${id}`)) {
+      setQuery(""); setFilterStatus(""); setFilterTrack(""); setDateFrom(""); setDateTo(""); setSummaryFilter("");
+      requestAnimationFrame(() => requestAnimationFrame(reveal));
+      return;
+    }
+    reveal();
   };
 
   return (
@@ -404,7 +416,7 @@ export function Dashboard({ applications: allApplications, tasks, today, career,
               <div className="outcome-legend" role="note"><span className="outcome-legend-item interview-legend-item"><i aria-hidden="true" />{t.interviewLegend}</span><span className="outcome-legend-item rejection-legend-item"><i aria-hidden="true" />{t.rejectionLegend}</span></div>
               {interviewCount > 0 && <div className="interview-group-banner" role="note"><div className="interview-group-title"><span className="interview-group-icon" aria-hidden="true">★</span><strong>{t.interviewGroupTitle}</strong><b>{interviewCount} {t.interviewGroupCount}</b></div><p>{t.interviewGroupHint}</p></div>}
               {rejectedApplications.length > 0 && <div className="rejection-group-banner" role="note"><div className="rejection-group-title"><span className="rejection-group-icon" aria-hidden="true">!</span><strong>{t.rejectionGroupTitle}</strong><b>{rejectedApplications.length} {t.rejectionGroupCount}</b></div><p>{t.rejectionGroupHint}</p></div>}
-              {followUps.length > 0 && <section className="follow-up-alerts" aria-live="polite" aria-labelledby="follow-up-alert-heading"><div className="follow-up-alert-head"><div><p className="eyebrow"><span className="eyebrow-line" /> {t.followUpAlerts}</p><h3 id="follow-up-alert-heading">{t.followUpHint}</h3></div><button className="alert-dismiss-all" type="button" onClick={() => dismissAll(followUps.map(followUpKey))}>{t.dismissAll}</button></div><div className="follow-up-alert-list">{followUps.map((item) => <article className="follow-up-alert" key={followUpKey(item)}><div className="follow-up-alert-copy"><strong>{item.company}</strong><span>{localizedContent(item.nextAction, language) || t.noNextAction}</span><small>{item.nextActionDate ? formatDate(item.nextActionDate, language, true) : t.noDate}</small></div><div className="follow-up-alert-actions"><button className="alert-open" type="button" onClick={() => openApplication(item.id)}>{t.viewFile}</button><button className="alert-dismiss" type="button" onClick={() => dismiss(followUpKey(item))}>{t.dismiss}</button></div></article>)}</div></section>}
+              {followUps.length > 0 && <section className="follow-up-alerts" aria-live="polite" aria-labelledby="follow-up-alert-heading"><div className="follow-up-alert-head"><div><p className="eyebrow"><span className="eyebrow-line" /> {t.followUpAlerts}</p><h3 id="follow-up-alert-heading">{t.followUpHint}</h3></div><button className="alert-dismiss-all" type="button" onClick={() => dismissAll(followUps.map(followUpKey))}>{t.dismissAll}</button></div><div className="follow-up-alert-list">{followUps.map((item) => <article className="follow-up-alert" key={followUpKey(item)}><div className="follow-up-alert-copy"><strong>{item.company}</strong><span>{localizedContent(item.nextAction, language) || t.noNextAction}</span><small>{item.nextActionDate ? formatDate(item.nextActionDate, language, true) : t.noDate}</small></div><div className="follow-up-alert-actions"><a className="alert-open" href={`#app-${item.id}`} onClick={(event) => { event.preventDefault(); openApplication(item.id); }}>{t.viewFile}</a><button className="alert-dismiss" type="button" onClick={() => dismiss(followUpKey(item))}>{t.dismiss}</button></div></article>)}</div></section>}
               <div className="list-head"><span>{t.number}</span><span></span><span>{t.jobCompany}</span><span>{t.source}</span><span>{t.status}</span><span>{t.followUpColumn}</span><span></span></div>
               {filtered.map((item, index) => {
                 const due = Boolean(item.nextActionDate && item.nextActionDate <= today && openStatuses.has(item.status) && !dismissed.has(followUpKey(item)));
