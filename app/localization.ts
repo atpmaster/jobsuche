@@ -189,6 +189,7 @@ function translateMixedContent(value: string, language: Language) {
 
 export function localizedSource(value: string | null | undefined, language: Language) {
   if (!value) return value;
+  value = value.trim();
   return ensureLanguage(
     translate(value, language, sourceTranslations),
     language,
@@ -198,6 +199,7 @@ export function localizedSource(value: string | null | undefined, language: Lang
 
 export function localizedContent(value: string | null | undefined, language: Language) {
   if (!value) return value;
+  value = value.trim();
   const gmailReply = value.match(/^Gmail yanıtı:\s*(.+)$/i);
   if (gmailReply) {
     return ensureLanguage(
