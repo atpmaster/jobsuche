@@ -216,6 +216,9 @@ export function Dashboard({ applications: allApplications, tasks, today, career,
   const completedTasks = tasks.filter((task) => task.done).length;
   const avgScore = applications.length ? Math.round(applications.reduce((sum, item) => sum + item.score, 0) / applications.length) : 0;
   const priority = followUps[0] ?? [...active].sort((a, b) => b.score - a.score)[0];
+  const cyberApplications = applications.filter((item) => item.track === "cyber");
+  const latestCyberApplication = cyberApplications[0] ?? null;
+  const interviewLabUrl = "http://127.0.0.1:4174/?from=applications";
   const recentUpdates = applications.flatMap((application) => application.updates.map((update) => ({ ...update, applicationName: application.company, applicationId: application.id }))).sort((a, b) => b.happenedOn.localeCompare(a.happenedOn)).slice(0, 5);
 
   useEffect(() => {
@@ -419,6 +422,12 @@ export function Dashboard({ applications: allApplications, tasks, today, career,
           <div className="file-layout">
             <section className={`file-list ${interviewCount ? "has-interview-group" : ""}`} id="basvurular" aria-label={language === "de" ? "Bewerbungsverfolgung" : "Başvuru takibi"}>
               <div className="list-intro"><div><p className="eyebrow"><span className="eyebrow-line" /> {t.records}</p><h2>{t.applications}</h2></div><span className="list-note">{t.clickToOpen} · {language === "de" ? "Vom neuesten zum ältesten Eintrag sortiert" : "En yeni başvurudan en eskiye sıralı"}</span></div>
+              <section className="lab-bridge-card" aria-labelledby="lab-bridge-title">
+                <div className="lab-bridge-head"><div><p className="eyebrow"><span className="eyebrow-line" /> {language === "de" ? "Verknüpfte Lernumgebung" : "Bağlı öğrenme alanı"}</p><h3 id="lab-bridge-title">{language === "de" ? "Cybersecurity-Mülakatlabor" : "Siber güvenlik mülakat laboratuvarı"}</h3></div><span className="lab-bridge-live"><i /> {language === "de" ? "Live aus diesem Portal" : "Bu portaldan canlı"}</span></div>
+                <p>{language === "de" ? "Die Bewerbungsdaten bleiben hier die einzige Quelle. Das Labor liest die Übersicht regelmäßig neu ein und öffnet die Übung in einem separaten Tab." : "Başvuru kayıtlarının tek kaynağı burasıdır. Laboratuvar bu özeti düzenli olarak yeniler ve uygulamayı ayrı sekmede açar."}</p>
+                <div className="lab-bridge-grid"><div><strong>{cyberApplications.length}</strong><span>{language === "de" ? "Cybersecurity-Dateien" : "Siber güvenlik başvurusu"}</span></div><div><strong>{latestCyberApplication ? statuses[latestCyberApplication.status] || latestCyberApplication.status : "—"}</strong><span>{language === "de" ? "Letzter Status" : "Son durum"}</span></div><div><strong>{latestCyberApplication?.role || "—"}</strong><span>{language === "de" ? "Nächste Übung" : "İlişkili başvuru"}</span></div></div>
+                <div className="lab-bridge-actions"><a className="lab-bridge-link" href={interviewLabUrl} target="_blank" rel="noreferrer">{language === "de" ? "Lokales Labor öffnen" : "Yerel laboratuvarı aç"} <span>↗</span></a><small>{language === "de" ? "Die lokale Adresse funktioniert auf diesem Computer." : "Yerel adres bu bilgisayardaki laboratuvarı açar."}</small></div>
+              </section>
               <div className="outcome-legend" role="note"><span className="outcome-legend-item interview-legend-item"><i aria-hidden="true" />{t.interviewLegend}</span><span className="outcome-legend-item rejection-legend-item"><i aria-hidden="true" />{t.rejectionLegend}</span></div>
               {interviewCount > 0 && <div className="interview-group-banner" role="note"><div className="interview-group-title"><span className="interview-group-icon" aria-hidden="true">★</span><strong>{t.interviewGroupTitle}</strong><b>{interviewCount} {t.interviewGroupCount}</b></div><p>{t.interviewGroupHint}</p></div>}
               {rejectedApplications.length > 0 && <div className="rejection-group-banner" role="note"><div className="rejection-group-title"><span className="rejection-group-icon" aria-hidden="true">!</span><strong>{t.rejectionGroupTitle}</strong><b>{rejectedApplications.length} {t.rejectionGroupCount}</b></div><p>{t.rejectionGroupHint}</p></div>}
