@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 const allowedOrigins = new Set([
   "http://127.0.0.1:4174",
   "http://localhost:4174",
+  "https://mulakat-hazirlanma-portali.yapay-zeka-e-5918.chatgpt.site",
 ]);
 
 function responseHeaders(request: Request) {

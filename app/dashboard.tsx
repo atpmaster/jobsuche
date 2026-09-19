@@ -218,7 +218,7 @@ export function Dashboard({ applications: allApplications, tasks, today, career,
   const priority = followUps[0] ?? [...active].sort((a, b) => b.score - a.score)[0];
   const cyberApplications = applications.filter((item) => item.track === "cyber");
   const latestCyberApplication = cyberApplications[0] ?? null;
-  const interviewLabUrl = "http://127.0.0.1:4174/?from=applications";
+  const interviewLabUrl = "https://mulakat-hazirlanma-portali.yapay-zeka-e-5918.chatgpt.site/?from=applications";
   const recentUpdates = applications.flatMap((application) => application.updates.map((update) => ({ ...update, applicationName: application.company, applicationId: application.id }))).sort((a, b) => b.happenedOn.localeCompare(a.happenedOn)).slice(0, 5);
 
   useEffect(() => {
@@ -426,7 +426,7 @@ export function Dashboard({ applications: allApplications, tasks, today, career,
                 <div className="lab-bridge-head"><div><p className="eyebrow"><span className="eyebrow-line" /> {language === "de" ? "Verknüpfte Lernumgebung" : "Bağlı öğrenme alanı"}</p><h3 id="lab-bridge-title">{language === "de" ? "Cybersecurity-Mülakatlabor" : "Siber güvenlik mülakat laboratuvarı"}</h3></div><span className="lab-bridge-live"><i /> {language === "de" ? "Live aus diesem Portal" : "Bu portaldan canlı"}</span></div>
                 <p>{language === "de" ? "Die Bewerbungsdaten bleiben hier die einzige Quelle. Das Labor liest die Übersicht regelmäßig neu ein und öffnet die Übung in einem separaten Tab." : "Başvuru kayıtlarının tek kaynağı burasıdır. Laboratuvar bu özeti düzenli olarak yeniler ve uygulamayı ayrı sekmede açar."}</p>
                 <div className="lab-bridge-grid"><div><strong>{cyberApplications.length}</strong><span>{language === "de" ? "Cybersecurity-Dateien" : "Siber güvenlik başvurusu"}</span></div><div><strong>{latestCyberApplication ? statuses[latestCyberApplication.status] || latestCyberApplication.status : "—"}</strong><span>{language === "de" ? "Letzter Status" : "Son durum"}</span></div><div><strong>{latestCyberApplication?.role || "—"}</strong><span>{language === "de" ? "Nächste Übung" : "İlişkili başvuru"}</span></div></div>
-                <div className="lab-bridge-actions"><a className="lab-bridge-link" href={interviewLabUrl} target="_blank" rel="noreferrer">{language === "de" ? "Lokales Labor öffnen" : "Yerel laboratuvarı aç"} <span>↗</span></a><small>{language === "de" ? "Die lokale Adresse funktioniert auf diesem Computer." : "Yerel adres bu bilgisayardaki laboratuvarı açar."}</small></div>
+                <div className="lab-bridge-actions"><a className="lab-bridge-link" href={interviewLabUrl} target="_blank" rel="noreferrer">{language === "de" ? "Interviewlabor öffnen" : "Mülakat laboratuvarını aç"} <span>↗</span></a><small>{language === "de" ? "Das Labor ist jetzt online erreichbar." : "Laboratuvar artık internet üzerinden erişilebilir."}</small></div>
               </section>
               <div className="outcome-legend" role="note"><span className="outcome-legend-item interview-legend-item"><i aria-hidden="true" />{t.interviewLegend}</span><span className="outcome-legend-item rejection-legend-item"><i aria-hidden="true" />{t.rejectionLegend}</span></div>
               {interviewCount > 0 && <div className="interview-group-banner" role="note"><div className="interview-group-title"><span className="interview-group-icon" aria-hidden="true">★</span><strong>{t.interviewGroupTitle}</strong><b>{interviewCount} {t.interviewGroupCount}</b></div><p>{t.interviewGroupHint}</p></div>}
