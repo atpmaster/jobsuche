@@ -11,6 +11,7 @@ import { LiveRefresh } from "./live-refresh";
 import { localizedContent, localizedLabel, localizedSource, statusLabels, type Language } from "./localization";
 import { formatInterviewDetails, getInterviewDetails, isConfirmedInterview } from "./interview-utils";
 import { InterviewSimulator } from "./interview-simulator";
+import { buildReport } from "./report";
 
 type Step = { id: number; label: string; done: number };
 type Update = { id: number; updateType: string; title: string; body: string | null; happenedOn: string };
@@ -253,7 +254,6 @@ export function Dashboard({ applications: allApplications, tasks, today, career,
   const printReport = async () => {
     setPdfBusy(true); setPdfError("");
     try {
-      const { buildReport } = await import("./report");
       if (invalidRange || !pdfApplications.length) throw new Error("EMPTY_REPORT");
       const rows = [...pdfApplications].sort((a, b) => {
         if (!a.appliedOn && !b.appliedOn) return 0;
