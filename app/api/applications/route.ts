@@ -31,6 +31,8 @@ export async function GET(request: Request) {
       next_action_date AS nextActionDate
     FROM applications
     WHERE deleted_at IS NULL
+      AND (feedback IS NULL
+        OR (feedback NOT LIKE 'Mükerrer Gmail kaydı;%' AND feedback NOT LIKE 'Gelen cevap; ayrı bir başvuru değil.%' AND feedback NOT LIKE 'Kein Bewerbungsvorgang:%'))
     ORDER BY COALESCE(applied_on, created_at) DESC, id DESC
   `).all<{
     id: number;
