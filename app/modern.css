@@ -657,6 +657,7 @@
   .integration-card a { color: #185cda; font-size: 12px; font-weight: 700; }
   .integration-draft textarea { resize: vertical; line-height: 1.45; }
   .integration-warning { padding: 9px 11px; color: #805218 !important; background: #fff6e8; border: 1px solid #efd5a7; border-radius: 8px; }
+  .integration-scope-note { padding: 9px 11px; color: #52657d !important; background: #f7faff; border: 1px solid #d6e2ef; border-radius: 8px; }
   .integration-warning a { color: #185cda; font-weight: 700; }
   .integration-url-row { display: flex; gap: 8px; max-width: 660px; }
   .integration-url-row input { flex: 1; }
