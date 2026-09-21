@@ -117,10 +117,14 @@ async function prepareDb() {
 
   // Older versions stored every non-interview reply as `received`. Promote
   // clear rejection replies so the result is visible without opening a row.
-  const responseRows = await db.prepare("SELECT id, feedback FROM applications WHERE status = 'received' AND feedback IS NOT NULL")
-    .all<{ id: number; feedback: string | null }>();
+  const responseRows = await db.prepare(`SELECT a.id, a.feedback,
+      COALESCE((SELECT group_concat(COALESCE(u.title, '') || ' ' || COALESCE(u.body, ''), ' ')
+        FROM application_updates u WHERE u.application_id = a.id), '') AS updatesText
+    FROM applications a WHERE a.status = 'received' AND (a.feedback IS NOT NULL OR EXISTS
+      (SELECT 1 FROM application_updates u WHERE u.application_id = a.id))`)
+    .all<{ id: number; feedback: string | null; updatesText: string | null }>();
   const rejectionRepairs = responseRows.results
-    .filter((row) => isRejectionResponse(row.feedback || ""))
+    .filter((row) => isRejectionResponse(`${row.feedback || ""} ${row.updatesText || ""}`))
     .map((row) => db.prepare("UPDATE applications SET status = 'rejected', next_action = ? WHERE id = ?").bind(rejectionNextAction, row.id));
   if (rejectionRepairs.length) await db.batch(rejectionRepairs);
 

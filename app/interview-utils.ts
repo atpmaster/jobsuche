@@ -4,7 +4,10 @@ export type InterviewDetails = { date: string; time: string };
 const invitationWords = /(vorstellungsgespräch|persönlichen gespräch|persönliches gespräch|zum gespräch|laden wir sie .* ein|termin bestätigen|mülakat|görüşme daveti|görüşmeye davet|görüşmeye çağır)/i;
 const rejectionWords = [
   /\babsage\b/i,
-  /\b(?:nicht|keine)\b.{0,80}\b(?:engere auswahl|auswahl|berücksichtigt|beruecksichtigt|positive nachricht|nehmen)\b/i,
+  /\b(?:nicht|keine)\b.{0,140}\b(?:engere[nr]? auswahl|auswahl|berücksichtig\w*|beruecksichtig\w*|positive nachricht|nehmen)\b/i,
+  /\b(?:engere[nr]? auswahl|auswahl)\b.{0,140}\b(?:nicht|keine)\b.{0,100}\b(?:berücksichtig\w*|beruecksichtig\w*)\b/i,
+  /\bnicht\s+(?:weiter\s+)?berücksichtig\w*\b/i,
+  /\bnicht\s+(?:weiter\s+)?beruecksichtig\w*\b/i,
   /\bleider\b.{0,100}\bmitteilen\b/i,
   /\bstelle bereits besetzt\b/i,
   /\b(?:bewerbung|bewerber)\b.{0,60}\b(?:abgelehnt|nicht berücksichtigt|nicht beruecksichtigt)\b/i,
