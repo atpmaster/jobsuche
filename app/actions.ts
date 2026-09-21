@@ -118,12 +118,16 @@ async function prepareDb() {
   // Older versions stored every non-interview reply as `received`. Promote
   // clear rejection replies so the result is visible without opening a row.
   const responseRows = await db.prepare(`SELECT a.id, a.feedback,
+      COALESCE((SELECT su.title FROM application_updates su
+        WHERE su.application_id = a.id AND su.update_type = 'Durum'
+        ORDER BY su.id DESC LIMIT 1), '') AS latestStatusUpdate,
       COALESCE((SELECT group_concat(COALESCE(u.title, '') || ' ' || COALESCE(u.body, ''), ' ')
         FROM application_updates u WHERE u.application_id = a.id), '') AS updatesText
     FROM applications a WHERE a.status = 'received' AND (a.feedback IS NOT NULL OR EXISTS
       (SELECT 1 FROM application_updates u WHERE u.application_id = a.id))`)
-    .all<{ id: number; feedback: string | null; updatesText: string | null }>();
+    .all<{ id: number; feedback: string | null; latestStatusUpdate: string; updatesText: string | null }>();
   const rejectionRepairs = responseRows.results
+    .filter((row) => !/^Durum:\s*(received|waiting)$/i.test(row.latestStatusUpdate.trim()))
     .filter((row) => isRejectionResponse(`${row.feedback || ""} ${row.updatesText || ""}`))
     .map((row) => db.prepare("UPDATE applications SET status = 'rejected', next_action = ? WHERE id = ?").bind(rejectionNextAction, row.id));
   if (rejectionRepairs.length) await db.batch(rejectionRepairs);
