@@ -21,7 +21,7 @@ export type Application = {
   id: number; company: string; role: string; track: string; location: string | null; score: number; status: string;
   deadline: string | null; url: string | null; notes: string | null; source: string | null; appliedOn: string | null;
   contactName: string | null; contactEmail: string | null; contactPhone: string | null; lastContactOn: string | null;
-  nextAction: string | null; nextActionDate: string | null; feedback: string | null; gmailMessageId?: string | null; steps: Step[]; updates: Update[];
+  nextAction: string | null; nextActionDate: string | null; feedback: string | null; gmailMessageId?: string | null; gmailThreadId?: string | null; steps: Step[]; updates: Update[];
   calendarEventUrl?: string | null; driveFolderUrl?: string | null;
 };
 type Task = { id: number; title: string; category: string; estimate: string; done: number };

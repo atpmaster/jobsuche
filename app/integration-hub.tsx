@@ -16,7 +16,7 @@ function draftFor(application: Application, language: "tr" | "de") {
 }
 
 async function readResponse(response: Response) {
-  const data = await response.json().catch(() => ({})) as { ok?: boolean; error?: string; reconnect?: boolean; url?: string; folderUrl?: string; fileUrl?: string };
+  const data = await response.json().catch(() => ({})) as { ok?: boolean; error?: string; reconnect?: boolean; url?: string; folderUrl?: string; fileUrl?: string; uploaded?: boolean };
   if (!response.ok || data.error) throw new Error(data.reconnect ? "RECONNECT" : data.error || "INTEGRATION_FAILED");
   return data;
 }
