@@ -641,4 +641,28 @@
     .simulator-answer-list article b { grid-column: 2; width: max-content; }
     .simulator-answer-list article p { margin-left: 32px; }
   }
+  .integration-hub { margin-top: 18px; }
+  .integration-hub > details { padding: 18px 20px; background: linear-gradient(135deg,#f4f8ff 0%,#ffffff 55%,#f1fbf6 100%); border: 1px solid #cbdced; border-radius: 14px; }
+  .integration-hub > details + details { margin-top: 12px; }
+  .integration-hub summary { color: #14243b; font-weight: 800; cursor: pointer; }
+  .integration-hub p { color: #52657d; font-size: 13px; }
+  .integration-hub > details > label { display: grid; gap: 5px; max-width: 540px; margin: 14px 0; color: #52657d; font-size: 12px; font-weight: 700; }
+  .integration-hub select, .integration-hub input, .integration-hub textarea { width: 100%; padding: 9px 10px; color: #243e62; background: #fff; border: 1px solid #bfcfe2; border-radius: 8px; font: inherit; }
+  .integration-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+  .integration-card { display: grid; align-content: start; gap: 8px; padding: 13px; background: #fff; border: 1px solid #d6e2ef; border-radius: 10px; }
+  .integration-card strong { color: #14243b; font-size: 14px; }
+  .integration-card small { min-height: 34px; color: #71839a; font-size: 12px; }
+  .integration-card button, .integration-url-row button, .job-capture-result button { padding: 9px 11px; color: #fff; background: #185cda; border: 0; border-radius: 7px; font-size: 12px; font-weight: 700; cursor: pointer; }
+  .integration-card button:disabled, .integration-url-row button:disabled, .job-capture-result button:disabled { opacity: .55; cursor: wait; }
+  .integration-card a { color: #185cda; font-size: 12px; font-weight: 700; }
+  .integration-draft textarea { resize: vertical; line-height: 1.45; }
+  .integration-warning { padding: 9px 11px; color: #805218 !important; background: #fff6e8; border: 1px solid #efd5a7; border-radius: 8px; }
+  .integration-warning a { color: #185cda; font-weight: 700; }
+  .integration-url-row { display: flex; gap: 8px; max-width: 660px; }
+  .integration-url-row input { flex: 1; }
+  .job-capture-result { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; max-width: 660px; margin-top: 14px; padding: 13px; background: #fff; border: 1px solid #d6e2ef; border-radius: 10px; }
+  .job-capture-result label { display: grid; gap: 5px; color: #52657d; font-size: 12px; font-weight: 700; }
+  .job-capture-result small { grid-column: 1 / -1; overflow: hidden; color: #71839a; text-overflow: ellipsis; white-space: nowrap; }
+  .job-capture-result button { grid-column: 1 / -1; justify-self: start; }
+  @media (max-width: 760px) { .integration-grid, .job-capture-result { grid-template-columns: 1fr; } .integration-url-row { display: grid; } .job-capture-result small, .job-capture-result button { grid-column: auto; } }
 }

@@ -51,3 +51,19 @@ export const gmailSyncStates = sqliteTable("gmail_sync_states", {
   lastError: text("last_error"),
   messagesImported: integer("messages_imported").notNull().default(0),
 });
+
+export const googleCalendarEvents = sqliteTable("google_calendar_events", {
+  applicationId: integer("application_id").primaryKey(),
+  providerEventId: text("provider_event_id").notNull(),
+  webViewLink: text("web_view_link"),
+  startsAt: text("starts_at").notNull(),
+  duration: integer("duration").notNull().default(60),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const googleDriveFolders = sqliteTable("google_drive_folders", {
+  applicationId: integer("application_id").primaryKey(),
+  providerFileId: text("provider_file_id").notNull(),
+  webViewLink: text("web_view_link"),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});

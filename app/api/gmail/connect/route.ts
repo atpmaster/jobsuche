@@ -13,7 +13,12 @@ export async function GET(request: Request) {
   auth.searchParams.set("response_type", "code");
   auth.searchParams.set("access_type", "offline");
   auth.searchParams.set("prompt", "select_account consent");
-  auth.searchParams.set("scope", "https://www.googleapis.com/auth/gmail.readonly");
+  auth.searchParams.set("scope", [
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.compose",
+    "https://www.googleapis.com/auth/calendar.events",
+    "https://www.googleapis.com/auth/drive.file",
+  ].join(" "));
   auth.searchParams.set("state", sessionId);
   return new Response(null, {
     status: 302,

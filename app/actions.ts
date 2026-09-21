@@ -87,6 +87,8 @@ async function prepareDb() {
     db.prepare(`CREATE TABLE IF NOT EXISTS gmail_sync_state (id INTEGER PRIMARY KEY, last_sync_at TEXT, last_attempt_at TEXT, last_error TEXT, messages_imported INTEGER NOT NULL DEFAULT 0)`),
     db.prepare(`CREATE TABLE IF NOT EXISTS gmail_connections (session_id TEXT PRIMARY KEY, access_token TEXT NOT NULL, refresh_token TEXT, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`),
     db.prepare(`CREATE TABLE IF NOT EXISTS gmail_sync_states (session_id TEXT PRIMARY KEY, last_sync_at TEXT, last_attempt_at TEXT, last_error TEXT, messages_imported INTEGER NOT NULL DEFAULT 0)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS google_calendar_events (application_id INTEGER PRIMARY KEY, provider_event_id TEXT NOT NULL, web_view_link TEXT, starts_at TEXT NOT NULL, duration INTEGER NOT NULL DEFAULT 60, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS google_drive_folders (application_id INTEGER PRIMARY KEY, provider_file_id TEXT NOT NULL, web_view_link TEXT, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`),
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status)`),
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_tasks_done_sort ON tasks(done, sort_order)`),
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_application_steps_app ON application_steps(application_id, sort_order)`),
@@ -287,9 +289,21 @@ export async function getDashboardData() {
   const cookieStore = await cookies();
   const gmailSessionId = cookieStore.get(GMAIL_SESSION_COOKIE)?.value ?? null;
   const gmailSync = await syncGmailApplications(db, gmailSessionId);
+  const today = new Date().toISOString().slice(0, 10);
+  // Turn due follow-ups into durable tasks when the workspace is opened. The
+  // title is stable so refreshing the dashboard never creates duplicates.
+  await db.prepare(`INSERT INTO tasks (title, category, estimate, sort_order)
+    SELECT 'Takip: ' || company || ' – ' || role, 'Başvuru takibi', '15 dk', 1
+    FROM applications
+    WHERE deleted_at IS NULL AND next_action_date IS NOT NULL AND next_action_date <= ?
+      AND status IN ('new', 'listed', 'sent', 'waiting', 'received', 'interview')
+      AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.title = 'Takip: ' || applications.company || ' – ' || applications.role AND t.done = 0)`)
+    .bind(today).run();
   const career = await getCareerData();
   const [apps, tasks, updates, steps] = await Promise.all([
-    db.prepare(`SELECT id, deleted_at AS deletedAt, company, role, track, location, score, status, deadline, url, notes, source, applied_on AS appliedOn, contact_name AS contactName, contact_email AS contactEmail, contact_phone AS contactPhone, last_contact_on AS lastContactOn, next_action AS nextAction, next_action_date AS nextActionDate, feedback, gmail_message_id AS gmailMessageId, gmail_thread_id AS gmailThreadId
+    db.prepare(`SELECT id, deleted_at AS deletedAt, company, role, track, location, score, status, deadline, url, notes, source, applied_on AS appliedOn, contact_name AS contactName, contact_email AS contactEmail, contact_phone AS contactPhone, last_contact_on AS lastContactOn, next_action AS nextAction, next_action_date AS nextActionDate, feedback, gmail_message_id AS gmailMessageId, gmail_thread_id AS gmailThreadId,
+        (SELECT web_view_link FROM google_calendar_events ce WHERE ce.application_id = applications.id) AS calendarEventUrl,
+        (SELECT web_view_link FROM google_drive_folders df WHERE df.application_id = applications.id) AS driveFolderUrl
       FROM applications ORDER BY COALESCE(applied_on, created_at) DESC, id DESC`).all<Application>(),
     db.prepare("SELECT id, title, category, estimate, done FROM tasks ORDER BY done ASC, sort_order ASC, id ASC LIMIT 8").all<Task>(),
     db.prepare("SELECT id, application_id AS applicationId, update_type AS updateType, title, body, happened_on AS happenedOn FROM application_updates ORDER BY happened_on DESC, id DESC").all<{ id: number; applicationId: number; updateType: string; title: string; body: string | null; happenedOn: string }>(),

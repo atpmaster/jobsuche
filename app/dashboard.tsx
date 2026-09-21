@@ -12,6 +12,7 @@ import { localizedContent, localizedLabel, localizedSource, statusLabels, type L
 import { formatInterviewDetails, getInterviewDetails, isConfirmedInterview } from "./interview-utils";
 import { InterviewSimulator } from "./interview-simulator";
 import { buildReport } from "./report";
+import { IntegrationHub } from "./integration-hub";
 
 type Step = { id: number; label: string; done: number };
 type Update = { id: number; updateType: string; title: string; body: string | null; happenedOn: string };
@@ -21,6 +22,7 @@ export type Application = {
   deadline: string | null; url: string | null; notes: string | null; source: string | null; appliedOn: string | null;
   contactName: string | null; contactEmail: string | null; contactPhone: string | null; lastContactOn: string | null;
   nextAction: string | null; nextActionDate: string | null; feedback: string | null; gmailMessageId?: string | null; steps: Step[]; updates: Update[];
+  calendarEventUrl?: string | null; driveFolderUrl?: string | null;
 };
 type Task = { id: number; title: string; category: string; estimate: string; done: number };
 type DashboardProps = { applications: Application[]; tasks: Task[]; today: string; career: CareerData; gmailConnected: boolean };
@@ -417,6 +419,7 @@ export function Dashboard({ applications: allApplications, tasks, today, career,
           </section>
           <section className="career-tools"><details><summary>{language==="de"?"Jobcenter-Berichtsprofil":"Jobcenter rapor profili"}</summary><p>{language==="de"?"Nur für diesen PDF-Download. Kundennummer wird weder gespeichert noch an den Server gesendet. Zeitraum und Status entsprechen den Filtern oben.":"Yalnızca bu PDF çıktısı için. Müşteri numarası kaydedilmez ve sunucuya gönderilmez. Dönem ve durum yukarıdaki filtrelerden alınır."}</p><label>{language==="de"?"Kundennummer (optional)":"Müşteri numarası (isteğe bağlı)"}<input maxLength={40} autoComplete="off" value={customerNumber} onChange={e=>setCustomerNumber(e.target.value)}/></label><label className="confirm-check"><input type="checkbox" checked={signature} onChange={e=>setSignature(e.target.checked)}/>{language==="de"?"Unterschriftsfeld im PDF":"PDF'ye imza alanı ekle"}</label></details></section>
           <CareerTools key={language} applications={applications} career={career} language={language} today={today}/>
+          <IntegrationHub applications={applications} career={career} language={language} gmailConnected={gmailConnected} />
           <InterviewSimulator applications={applications} defaultApplicationId={interviewApplications[0]?.id ?? applications.find((item) => item.track === "cyber")?.id ?? applications[0]?.id ?? null} language={language} />
           <details className="audit-tools"><summary>{language === "de" ? "Berichtsdaten prüfen" : "Rapor verilerini kontrol et"}</summary><p>{language === "de" ? "Hier können die Angaben der einzelnen Bewerbungen für einen klaren Jobcenter-Bericht korrigiert werden." : "Buradan her başvurunun Jobcenter raporu için kurum, durum, tarih, takip ve geri dönüş bilgilerini düzeltebilirsin."}</p><div className="audit-editor-list">{applications.map(item => <ApplicationAuditEditor key={item.id} item={item} language={language} />)}</div></details>
           <div className="file-layout">
