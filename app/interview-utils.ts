@@ -13,6 +13,8 @@ const rejectionWords = [
   /\b(?:bewerbung|bewerber)\b.{0,60}\b(?:abgelehnt|nicht berücksichtigt|nicht beruecksichtigt)\b/i,
   /\b(?:olumsuz|reddedildi|kabul edilmedi|başka bir aday)\b/i,
 ];
+const jobContextWords = /\b(?:bewerb\w*|unterlagen|stelle|stellenangebot|position|anstellung|auswahl\w*|karriere|recruiting|personal|job|tätigkeit|beschaeftigung|beschäftigung|application)\b/i;
+const unrelatedMessageWords = /\b(?:einbürgerung|staatsangehörigkeit|mitgliedschaft|widerruf|versicherung|kita|krippenplatz|vertrag)\b/i;
 
 function normalizeDate(day: string, month: string, year: string) {
   return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
@@ -63,6 +65,12 @@ export function isConfirmedInterview(updates: InterviewUpdateLike[], startsAt?: 
 
 export function isRejectionResponse(value: string) {
   return rejectionWords.some((pattern) => pattern.test(value));
+}
+
+export function isJobRejectionResponse(value: string) {
+  const text = value || "";
+  if (!isRejectionResponse(text) || !jobContextWords.test(text)) return false;
+  return !(unrelatedMessageWords.test(text) && !/\b(?:bewerb\w*|unterlagen|stelle|position|anstellung|auswahl\w*)\b/i.test(text));
 }
 
 export function formatInterviewDetails(details: InterviewDetails | null, language: "tr" | "de") {

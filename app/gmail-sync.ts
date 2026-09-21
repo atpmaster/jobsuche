@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { isDuplicate, normalize } from "./record-utils";
-import { isConfirmedInterview, isRejectionResponse } from "./interview-utils";
+import { isConfirmedInterview, isJobRejectionResponse } from "./interview-utils";
 
 type Database = D1Database;
 
@@ -190,7 +190,7 @@ function isAutomatedJobAlert(text: string) {
 }
 
 function responseStatus(text: string) {
-  if (isRejectionResponse(text)) return "rejected";
+  if (isJobRejectionResponse(text)) return "rejected";
   return isConfirmedInterview([{ title: text, body: "" }]) && !isAutomatedJobAlert(text) ? "interview" : "received";
 }
 

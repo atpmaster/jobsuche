@@ -6,7 +6,7 @@ import { isDuplicate } from "./record-utils";
 import { getCareerData } from "./career-actions";
 import { syncGmailApplications } from "./gmail-sync";
 import { GMAIL_SESSION_COOKIE } from "./gmail-session";
-import { isConfirmedInterview, isRejectionResponse } from "./interview-utils";
+import { isConfirmedInterview, isJobRejectionResponse, isRejectionResponse } from "./interview-utils";
 import { cookies } from "next/headers";
 
 type Application = {
@@ -128,7 +128,7 @@ async function prepareDb() {
     .all<{ id: number; feedback: string | null; latestStatusUpdate: string; updatesText: string | null }>();
   const rejectionRepairs = responseRows.results
     .filter((row) => !/^Durum:\s*(received|waiting)$/i.test(row.latestStatusUpdate.trim()))
-    .filter((row) => isRejectionResponse(`${row.feedback || ""} ${row.updatesText || ""}`))
+    .filter((row) => isJobRejectionResponse(`${row.feedback || ""} ${row.updatesText || ""}`))
     .map((row) => db.prepare("UPDATE applications SET status = 'rejected', next_action = ? WHERE id = ?").bind(rejectionNextAction, row.id));
   if (rejectionRepairs.length) await db.batch(rejectionRepairs);
 
