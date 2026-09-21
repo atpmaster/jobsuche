@@ -31,6 +31,7 @@ type Application = {
   nextActionDate: string | null;
   feedback: string | null;
   gmailMessageId: string | null;
+  gmailThreadId: string | null;
 };
 
 type Task = { id: number; title: string; category: string; estimate: string; done: number };
@@ -103,6 +104,7 @@ async function prepareDb() {
     ensureColumn(db, "applications", "next_action_date", "TEXT"),
     ensureColumn(db, "applications", "feedback", "TEXT"),
     ensureColumn(db, "applications", "gmail_message_id", "TEXT"),
+    ensureColumn(db, "applications", "gmail_thread_id", "TEXT"),
     ensureColumn(db, "application_updates", "gmail_message_id", "TEXT"),
   ]);
 
@@ -287,7 +289,7 @@ export async function getDashboardData() {
   const gmailSync = await syncGmailApplications(db, gmailSessionId);
   const career = await getCareerData();
   const [apps, tasks, updates, steps] = await Promise.all([
-    db.prepare(`SELECT id, deleted_at AS deletedAt, company, role, track, location, score, status, deadline, url, notes, source, applied_on AS appliedOn, contact_name AS contactName, contact_email AS contactEmail, contact_phone AS contactPhone, last_contact_on AS lastContactOn, next_action AS nextAction, next_action_date AS nextActionDate, feedback, gmail_message_id AS gmailMessageId
+    db.prepare(`SELECT id, deleted_at AS deletedAt, company, role, track, location, score, status, deadline, url, notes, source, applied_on AS appliedOn, contact_name AS contactName, contact_email AS contactEmail, contact_phone AS contactPhone, last_contact_on AS lastContactOn, next_action AS nextAction, next_action_date AS nextActionDate, feedback, gmail_message_id AS gmailMessageId, gmail_thread_id AS gmailThreadId
       FROM applications ORDER BY COALESCE(applied_on, created_at) DESC, id DESC`).all<Application>(),
     db.prepare("SELECT id, title, category, estimate, done FROM tasks ORDER BY done ASC, sort_order ASC, id ASC LIMIT 8").all<Task>(),
     db.prepare("SELECT id, application_id AS applicationId, update_type AS updateType, title, body, happened_on AS happenedOn FROM application_updates ORDER BY happened_on DESC, id DESC").all<{ id: number; applicationId: number; updateType: string; title: string; body: string | null; happenedOn: string }>(),

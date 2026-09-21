@@ -2,6 +2,7 @@ export type InterviewUpdateLike = { title?: string | null; body?: string | null 
 export type InterviewDetails = { date: string; time: string };
 
 const invitationWords = /(vorstellungsgespräch|persönlichen gespräch|persönliches gespräch|zum gespräch|laden wir sie .* ein|termin bestätigen|mülakat|görüşme daveti|görüşmeye davet|görüşmeye çağır)/i;
+const confirmationWords = /\b(?:bestätig\w*|confirm\w*|teyit\w*|onayl\w*)\b[\s\S]{0,140}\b(?:termin|vorstellungsgespräch|gespräch|appointment|interview|görüşme)\b|\b(?:termin|vorstellungsgespräch|gespräch|appointment|interview|görüşme)\b[\s\S]{0,100}\b(?:bestätig\w*|confirm\w*|teyit\w*|onayl\w*)\b/i;
 const rejectionWords = [
   /\babsage\b/i,
   /\b(?:nicht|keine)\b.{0,140}\b(?:engere[nr]? auswahl|auswahl|berücksichtig\w*|beruecksichtig\w*|positive nachricht|nehmen)\b/i,
@@ -32,7 +33,7 @@ function scheduledDetails(value: string) {
 }
 
 export function extractInterviewDetails(text: string) {
-  if (!invitationWords.test(text)) return null;
+  if (!invitationWords.test(text) && !confirmationWords.test(text)) return null;
   const iso = text.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
   const german = text.match(/\b(\d{1,2})[.]([0]?[1-9]|1[0-2])[.](\d{4})\b/);
   const slash = text.match(/\b(\d{1,2})[/]([0]?[1-9]|1[0-2])[/](\d{4})\b/);
@@ -61,6 +62,11 @@ export function getInterviewDetails(updates: InterviewUpdateLike[], startsAt?: s
 
 export function isConfirmedInterview(updates: InterviewUpdateLike[], startsAt?: string | null) {
   return Boolean(getInterviewDetails(updates, startsAt));
+}
+
+export function isInterviewConfirmation(updates: InterviewUpdateLike[]) {
+  return updates.some((update) => confirmationWords.test(`${update.title || ""} ${update.body || ""}`))
+    && Boolean(getInterviewDetails(updates));
 }
 
 export function isRejectionResponse(value: string) {
