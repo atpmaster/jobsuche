@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { isDuplicate, normalize } from "./record-utils";
-import { isConfirmedInterview, isInterviewConfirmation, isJobRejectionResponse } from "./interview-utils";
+import { getInterviewDetails, isConfirmedInterview, isInterviewConfirmation, isJobRejectionResponse } from "./interview-utils";
 
 type Database = D1Database;
 
@@ -312,6 +312,7 @@ async function importReplies(db: Database, state: TokenState, ids: string[], app
     const date = berlinDate(message.internalDate);
     const combined = `${subject} ${body}`;
     const confirmation = isInterviewConfirmation([{ title: subject, body }]);
+    const interviewDetails = getInterviewDetails([{ title: subject, body }]);
     const status = responseStatus(combined);
     const nextStatus = status === "received" && application.status === "interview" ? "interview" : status;
     const title = confirmation ? `Gmail yanıtı (Mülakat teyidi): ${subject}` : `Gmail yanıtı: ${subject}`;
@@ -322,6 +323,11 @@ async function importReplies(db: Database, state: TokenState, ids: string[], app
     if (!application.gmailThreadId && message.threadId) {
       statements.push(db.prepare("UPDATE applications SET gmail_thread_id = ? WHERE id = ?").bind(message.threadId, application.id));
       application.gmailThreadId = message.threadId;
+    }
+    if (confirmation && interviewDetails) {
+      statements.push(db.prepare(`INSERT OR IGNORE INTO interviews (application_id, starts_at, duration, notes)
+        VALUES (?, ?, 60, ?)`)
+        .bind(application.id, `${interviewDetails.date}T${interviewDetails.time}`, "Gmail daveti/teyidinden otomatik oluşturuldu."));
     }
     statements.push(db.prepare("UPDATE applications SET status = ?, next_action = CASE WHEN ? = 'rejected' THEN 'Başka işlem gerekmiyor' WHEN ? = 'interview' AND ? = 1 THEN 'Mülakat teyit edildi; görüşmeye hazırlan' ELSE next_action END WHERE id = ?").bind(nextStatus, nextStatus, nextStatus, confirmation ? 1 : 0, application.id));
     await db.batch(statements);

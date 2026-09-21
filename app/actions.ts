@@ -6,7 +6,7 @@ import { isDuplicate } from "./record-utils";
 import { getCareerData } from "./career-actions";
 import { syncGmailApplications } from "./gmail-sync";
 import { GMAIL_SESSION_COOKIE } from "./gmail-session";
-import { isConfirmedInterview, isJobRejectionResponse, isRejectionResponse } from "./interview-utils";
+import { getInterviewDetails, isConfirmedInterview, isJobRejectionResponse, isRejectionResponse } from "./interview-utils";
 import { cookies } from "next/headers";
 
 type Application = {
@@ -162,6 +162,12 @@ async function prepareDb() {
   const interviewRepairs = [];
   for (const [id, application] of interviewGroups) {
     const confirmed = isConfirmedInterview(application.updates, interviewEvents.get(id));
+    const details = getInterviewDetails(application.updates, interviewEvents.get(id));
+    if (confirmed && !interviewEvents.has(id) && details) {
+      interviewRepairs.push(db.prepare("INSERT OR IGNORE INTO interviews (application_id, starts_at, duration, notes) VALUES (?, ?, 60, ?)")
+        .bind(id, `${details.date}T${details.time}`, "Gmail daveti/teyidinden otomatik oluşturuldu."));
+      interviewEvents.set(id, `${details.date}T${details.time}`);
+    }
     if (confirmed && ["new", "listed", "sent", "waiting", "received"].includes(application.status)) {
       interviewRepairs.push(db.prepare("UPDATE applications SET status = 'interview', next_action = ? WHERE id = ?").bind(nextActionForStatus("interview", application.nextAction), id));
     } else if (!confirmed && application.status === "interview") {
