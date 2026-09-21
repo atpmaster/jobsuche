@@ -45,6 +45,13 @@ function extractEmail(value: string) {
   return value.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0]?.toLowerCase() ?? "";
 }
 
+function emailDomainsMatch(left: string, right: string) {
+  const leftDomain = left.split("@")[1]?.toLowerCase() ?? "";
+  const rightDomain = right.split("@")[1]?.toLowerCase() ?? "";
+  if (!leftDomain || !rightDomain) return false;
+  return leftDomain === rightDomain || leftDomain.endsWith(`.${rightDomain}`) || rightDomain.endsWith(`.${leftDomain}`);
+}
+
 function decodeBase64Url(value: string) {
   try {
     const binary = atob(value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "="));
@@ -170,6 +177,7 @@ function applicationMatch(message: GmailMessage, apps: StoredApplication[]) {
   const haystack = normalize(`${subject} ${from} ${fromEmail}`);
   return apps.find((application) => {
     if (application.contactEmail && fromEmail && application.contactEmail.toLowerCase() === fromEmail) return true;
+    if (application.contactEmail && fromEmail && emailDomainsMatch(application.contactEmail, fromEmail)) return true;
     const company = normalize(application.company);
     if (company.length >= 5 && haystack.includes(company)) return true;
     const role = normalize(application.role);
