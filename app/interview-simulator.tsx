@@ -197,12 +197,15 @@ export function InterviewSimulator({
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem("interview-simulator-last-session");
-      if (stored) setLastSession(JSON.parse(stored) as { score: number; role: string; completedAt: string });
-    } catch {
-      setLastSession(null);
-    }
+    const timer = window.setTimeout(() => {
+      try {
+        const stored = window.localStorage.getItem("interview-simulator-last-session");
+        if (stored) setLastSession(JSON.parse(stored) as { score: number; role: string; completedAt: string });
+      } catch {
+        setLastSession(null);
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
