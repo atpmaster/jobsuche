@@ -21,3 +21,19 @@ test("kişisel takip sistemi ve kalıcı veri katmanı hazır", async () => {
   assert.match(interviewUtils, /confirmationWords/);
   assert.equal(JSON.parse(hosting).d1, "DB");
 });
+
+test("dil sınırı ve filtreli PDF kapsamları ayrıdır", async () => {
+  const [dashboard, localization, report] = await Promise.all([
+    readFile(new URL("../app/dashboard.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/localization.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/report.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(dashboard, /type PdfScope = "all" \| "interview" \| "rejected" \| "withoutInterview"/);
+  assert.match(dashboard, /pdfScope === "rejected"/);
+  assert.match(dashboard, /Sadece ret \/ olumsuz cevaplar/);
+  assert.match(dashboard, /localizedNextAction/);
+  assert.match(dashboard, /EMPTY_REPORT/);
+  assert.match(localization, /Vorstellungsgespräch bestätigt; auf das Gespräch vorbereiten/);
+  assert.match(localization, /mülakat\|görüşme\|hazırlan/);
+  assert.match(report, /Klassifizierung der Rückmeldung/);
+});

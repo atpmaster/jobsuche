@@ -102,6 +102,8 @@ const contentTranslations: Record<string, Translation> = {
   "Geri dönüşü bekle": { tr: "Geri dönüşü bekle", de: "Rückmeldung abwarten" },
   "Mülakat tarihini ve bağlantısını doğrula; görüşmeye hazırlan": { tr: "Mülakat tarihini ve bağlantısını doğrula; görüşmeye hazırlan", de: "Termin und Gesprächslink bestätigen; auf das Gespräch vorbereiten" },
   "Termin und Gesprächslink bestätigen; auf das Gespräch vorbereiten": { tr: "Mülakat tarihini ve bağlantısını doğrula; görüşmeye hazırlan", de: "Termin und Gesprächslink bestätigen; auf das Gespräch vorbereiten" },
+  "Mülakat teyit edildi; görüşmeye hazırlan": { tr: "Mülakat teyit edildi; görüşmeye hazırlan", de: "Vorstellungsgespräch bestätigt; auf das Gespräch vorbereiten" },
+  "Vorstellungsgespräch bestätigt; auf das Gespräch vorbereiten": { tr: "Mülakat teyit edildi; görüşmeye hazırlan", de: "Vorstellungsgespräch bestätigt; auf das Gespräch vorbereiten" },
   "Başvuru teyidini ve açık pozisyonları izle": { tr: "Başvuru teyidini ve açık pozisyonları izle", de: "Eingangsbestätigung und offene Stellen beobachten" },
   "Yanıt için takip tarihi geldiğinde kontrol et": { tr: "Yanıt için takip tarihi geldiğinde kontrol et", de: "Zum Nachfassdatum auf Rückmeldung prüfen" },
   "Eingangsbestätigung prüfen": { tr: "Başvuru alındı teyidini kontrol et", de: "Eingangsbestätigung prüfen" },
@@ -180,7 +182,7 @@ function translate(value: string, language: Language, translations: Record<strin
 // Free-form notes and Gmail text can arrive in the other language. Never let
 // an untranslated value leak into a localized page or report. Known texts are
 // translated above; this guard is the final boundary for newly imported text.
-const turkishMarkers = /(başvuru|gönderildi|gönderilen|e-posta|geri dönüş|bekleniyor|tarihinde|sonradan|teyidi|portalda|siber güvenlik|birleştirilmiş|başlangıç|kontrol edilecek|üzerinden|eklendi|otomatik|alındı)/i;
+const turkishMarkers = /(başvuru|gönderildi|gönderilen|e-posta|geri dönüş|bekleniyor|tarihinde|sonradan|teyidi|portalda|siber güvenlik|birleştirilmiş|başlangıç|kontrol edilecek|üzerinden|eklendi|otomatik|alındı|mülakat|görüşme|hazırlan|teyit edildi)/i;
 const germanMarkers = /(bewerbung|bewerbungs|gesendet|rückmeldung|eingangsbestätigung|nachgereicht|prüfen|prüfe|kontrollieren|abwarten|erhalten|e-mail|karriereportal|stellennummer|unterlagen|automatisch|vorstellungsgespräch|einladung|termin|gespräch|unbekannter|deutscher|einbürgerung|familie|vorabfrage|\bzur\b|\bihre?r?\b|\bauf\b|\bder\b|\bdie\b|\bdas\b|\bund\b|\bfür\b|\bmit\b|\beine?\b|\bist\b|\bwurde\b|\bwerden\b)/i;
 
 function hasForeignLanguage(value: string, language: Language) {
