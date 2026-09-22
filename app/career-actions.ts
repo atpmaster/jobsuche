@@ -21,8 +21,13 @@ export async function editCareerApplication(data:FormData) {
 export async function saveInterview(data:FormData) {
   const startsAt=str(data,"startsAt"),duration=Number(data.get("duration"));
   if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(startsAt)||!Number.isFinite(Date.parse(startsAt))||!Number.isInteger(duration)||duration<15||duration>480)throw Error("INVALID_INPUT");
-  await env.DB.prepare("INSERT INTO interviews (application_id,starts_at,duration,location,notes) SELECT id,?,?,?,? FROM applications WHERE id=? AND deleted_at IS NULL")
-    .bind(startsAt,duration,str(data,"location"),str(data,"notes"),id(data,"applicationId")).run();
+  const applicationId = id(data,"applicationId");
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO interviews (application_id,starts_at,duration,location,notes) SELECT id,?,?,?,? FROM applications WHERE id=? AND deleted_at IS NULL")
+      .bind(startsAt,duration,str(data,"location"),str(data,"notes"),applicationId),
+    env.DB.prepare("UPDATE applications SET status='received', response_classification='interview', next_action='Mülakat teyit edildi; görüşmeye hazırlan' WHERE id=? AND deleted_at IS NULL")
+      .bind(applicationId),
+  ]);
   revalidatePath("/");
 }
 export async function deleteInterview(data:FormData) {

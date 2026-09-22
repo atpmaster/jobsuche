@@ -23,10 +23,13 @@ test("kişisel takip sistemi ve kalıcı veri katmanı hazır", async () => {
 });
 
 test("dil sınırı ve filtreli PDF kapsamları ayrıdır", async () => {
-  const [dashboard, localization, report] = await Promise.all([
+  const [dashboard, localization, report, integration, classification, career] = await Promise.all([
     readFile(new URL("../app/dashboard.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/localization.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/report.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/integration-hub.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/response-classification.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/career-actions.ts", import.meta.url), "utf8"),
   ]);
   assert.match(dashboard, /type PdfScope = "all" \| "interview" \| "rejected" \| "withoutInterview"/);
   assert.match(dashboard, /pdfScope === "rejected"/);
@@ -36,4 +39,9 @@ test("dil sınırı ve filtreli PDF kapsamları ayrıdır", async () => {
   assert.match(localization, /Vorstellungsgespräch bestätigt; auf das Gespräch vorbereiten/);
   assert.match(localization, /mülakat\|görüşme\|hazırlan/);
   assert.match(report, /Klassifizierung der Rückmeldung/);
+  assert.match(integration, /Integrationen/);
+  assert.doesNotMatch(integration, /const copy = de \? \{ title: "Bağlantılar"/);
+  assert.match(integration, /Google-Kalendereintrag hinzufügen/);
+  assert.match(classification, /isPendingApplicationNote/);
+  assert.match(career, /response_classification='interview'/);
 });

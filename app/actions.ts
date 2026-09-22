@@ -7,7 +7,7 @@ import { getCareerData } from "./career-actions";
 import { syncGmailApplications } from "./gmail-sync";
 import { GMAIL_SESSION_COOKIE } from "./gmail-session";
 import { getInterviewDetails, isConfirmedInterview, isJobRejectionResponse, isRejectionResponse } from "./interview-utils";
-import { classifyResponse, isResponseClassification, type ResponseClassification } from "./response-classification";
+import { classifyResponse, isPendingApplicationNote, isResponseClassification, type ResponseClassification } from "./response-classification";
 import { cookies } from "next/headers";
 
 type Application = {
@@ -136,11 +136,14 @@ async function prepareDb() {
     }>();
   const classificationRepairs = classificationRows.results.flatMap((row) => {
     const text = `${row.feedback || ""} ${row.updatesText || ""}`.trim();
-    const inferred = row.status === "interview" ? "interview" : row.status === "rejected" ? "rejected" : classifyResponse(text);
-    const classification = isResponseClassification(row.responseClassification) && row.responseClassification !== "none"
+    const pendingNote = isPendingApplicationNote(text);
+    const inferred = pendingNote ? "none" : row.status === "interview" ? "interview" : row.status === "rejected" ? "rejected" : classifyResponse(text);
+    const classification = pendingNote ? "none" : isResponseClassification(row.responseClassification) && row.responseClassification !== "none"
       ? row.responseClassification
       : inferred;
-    const status = ["interview", "rejected"].includes(row.status) || classification !== "none" ? "received" : row.status;
+    const status = pendingNote && (row.status === "received" || row.responseClassification === "other")
+      ? "waiting"
+      : ["interview", "rejected"].includes(row.status) || classification !== "none" ? "received" : row.status;
     if (status === row.status && classification === (row.responseClassification || "none")) return [];
     return [db.prepare("UPDATE applications SET status = ?, response_classification = ? WHERE id = ?").bind(status, classification, row.id)];
   });
