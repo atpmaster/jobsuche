@@ -1,12 +1,12 @@
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
 
-export type ReportRow = { company: string; role: string; location: string; date: string; source: string; status: string; statusKey?: string; next: string };
+export type ReportRow = { company: string; role: string; location: string; date: string; source: string; status: string; statusKey?: string; classification: string; classificationKey?: string; next: string };
 export async function buildReport(rows: ReportRow[], language: "tr" | "de", date: string, fonts?: string[], profile?: {customerNumber?:string;signature?:boolean;period?:string}) {
   const de = language === "de";
   const fileStem = de ? "Ahmet Tepe Bewerbungsnachweis" : "Ahmet Tepe Başvuru Takip";
-  const interviewCount = rows.filter((row) => row.statusKey === "interview").length;
-  const rejectedRows = rows.filter((row) => row.statusKey === "rejected");
+  const interviewCount = rows.filter((row) => row.classificationKey === "interview").length;
+  const rejectedRows = rows.filter((row) => row.classificationKey === "rejected");
   const waitingCount = rows.filter((row) => row.statusKey === "waiting").length;
   const doc = new jsPDF({ orientation: "landscape", format: "a4", compress: true });
   let reportFont = "helvetica";
@@ -32,14 +32,19 @@ export async function buildReport(rows: ReportRow[], language: "tr" | "de", date
   doc.setProperties({ title: fileStem, subject: de ? "Bewerbungsaktivitäten und Rückmeldungen" : "Başvuru faaliyetleri ve geri dönüşler", author: "Ahmet Tepe" });
   autoTable(doc, {
     startY: 64, margin: { top: 64, bottom: profile?.signature ? 35 : 20, left: 14, right: 14 },
-    head: [[de ? "Nr." : "No", de ? "Datum der\nBewerbung" : "Başvuru tarihi", de ? "Arbeitgeber / Stelle" : "Kurum / pozisyon", de ? "Quelle / Kanal" : "Kaynak / kanal", de ? "Aktueller Stand" : "Güncel durum", de ? "Nächster Schritt" : "Sonraki adım"]],
-    body: rows.map((row, index) => [String(index + 1).padStart(2, "0"), row.date, `${row.company}\n${row.role}${row.location ? `\n${row.location}` : ""}`, row.source, row.status, row.next]),
+    head: [[de ? "Nr." : "No", de ? "Datum der\nBewerbung" : "Başvuru tarihi", de ? "Arbeitgeber / Stelle" : "Kurum / pozisyon", de ? "Quelle / Kanal" : "Kaynak / kanal", de ? "Aktueller Stand" : "Güncel durum", de ? "Klassifizierung der Rückmeldung" : "Gelen cevabın sınıflandırması", de ? "Nächster Schritt" : "Sonraki adım"]],
+    body: rows.map((row, index) => [String(index + 1).padStart(2, "0"), row.date, `${row.company}\n${row.role}${row.location ? `\n${row.location}` : ""}`, row.source, row.status, row.classification, row.next]),
     didParseCell: (data) => {
-      if (data.section !== "body" || data.column.index !== 4) return;
-      const status = rows[data.row.index]?.statusKey;
+      if (data.section !== "body" || ![4, 5].includes(data.column.index)) return;
+      const status = data.column.index === 4 ? rows[data.row.index]?.statusKey : rows[data.row.index]?.classificationKey;
       const styles: Record<string, { text: [number, number, number]; fill: [number, number, number] }> = {
         interview: { text: [110, 58, 5], fill: [255, 226, 173] },
         rejected: { text: [145, 36, 39], fill: [251, 233, 231] },
+        acknowledgement: { text: [55, 84, 130], fill: [232, 240, 255] },
+        under_review: { text: [79, 86, 96], fill: [239, 242, 245] },
+        positive: { text: [38, 115, 77], fill: [230, 243, 233] },
+        documents: { text: [32, 91, 145], fill: [229, 242, 252] },
+        other: { text: [88, 73, 130], fill: [240, 234, 255] },
         received: { text: [114, 80, 169], fill: [240, 234, 255] },
         waiting: { text: [38, 115, 77], fill: [230, 243, 233] },
         sent: { text: [38, 115, 77], fill: [230, 243, 233] },
@@ -55,7 +60,7 @@ export async function buildReport(rows: ReportRow[], language: "tr" | "de", date
     styles: { font: reportFont, fontSize: 9, cellPadding: profile?.period ? 2.2 : 3.2, textColor: [35, 47, 64], lineColor: [222, 228, 235], lineWidth: { bottom: 0.15 }, overflow: "linebreak", valign: "top" },
     headStyles: { fillColor: [23, 43, 67], textColor: 255, fontStyle: "bold", fontSize: 8.5 },
     alternateRowStyles: { fillColor: [245, 248, 251] },
-    columnStyles: { 0: { cellWidth: 12 }, 1: { cellWidth: 29 }, 2: { cellWidth: 86 }, 3: { cellWidth: 39 }, 4: { cellWidth: 37 }, 5: { cellWidth: 66 } },
+    columnStyles: { 0: { cellWidth: 12 }, 1: { cellWidth: 27 }, 2: { cellWidth: 76 }, 3: { cellWidth: 31 }, 4: { cellWidth: 27 }, 5: { cellWidth: 40 }, 6: { cellWidth: 56 } },
   });
   if (rejectedRows.length) {
     const rejectionTitle = de ? "Absagen / negative Rückmeldungen" : "Ret / olumsuz cevaplar";

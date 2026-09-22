@@ -28,6 +28,7 @@ export function OPTIONS(request: Request) {
 export async function GET(request: Request) {
   const rows = await env.DB.prepare(`
     SELECT id, company, role, track, location, score, status,
+      response_classification AS responseClassification,
       applied_on AS appliedOn, source, url, next_action AS nextAction,
       next_action_date AS nextActionDate
     FROM applications
@@ -43,6 +44,7 @@ export async function GET(request: Request) {
     location: string | null;
     score: number;
     status: string;
+    responseClassification: string;
     appliedOn: string | null;
     source: string | null;
     url: string | null;
@@ -58,6 +60,7 @@ export async function GET(request: Request) {
     location: row.location,
     score: row.score,
     status: row.status,
+    responseClassification: row.responseClassification,
     appliedOn: row.appliedOn,
     source: row.source,
     url: row.url,

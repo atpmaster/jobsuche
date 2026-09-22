@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { isDuplicate, normalize } from "./record-utils";
 import { getInterviewDetails, isConfirmedInterview, isInterviewConfirmation, isJobRejectionResponse } from "./interview-utils";
+import { classifyResponse, type ResponseClassification } from "./response-classification";
 
 type Database = D1Database;
 
@@ -13,6 +14,7 @@ type StoredApplication = {
   gmailMessageId: string | null;
   gmailThreadId: string | null;
   status: string;
+  responseClassification: ResponseClassification | null;
 };
 
 type GmailHeader = { name?: string; value?: string };
@@ -201,9 +203,14 @@ function isAutomatedJobAlert(text: string) {
   return AUTOMATED_JOB_ALERT_WORDS.test(text);
 }
 
-function responseStatus(text: string) {
-  if (isJobRejectionResponse(text)) return "rejected";
-  return isConfirmedInterview([{ title: text, body: "" }]) && !isAutomatedJobAlert(text) ? "interview" : "received";
+function responseStatus(text: string): { status: "received"; responseClassification: ResponseClassification } {
+  if (isJobRejectionResponse(text)) return { status: "received", responseClassification: "rejected" };
+  return {
+    status: "received",
+    responseClassification: isConfirmedInterview([{ title: text, body: "" }]) && !isAutomatedJobAlert(text)
+      ? "interview"
+      : classifyResponse(text),
+  };
 }
 
 async function refreshAccessToken(db: Database, state: TokenState) {
@@ -289,7 +296,7 @@ async function importSentMessages(db: Database, state: TokenState, ids: string[]
       db.prepare("INSERT INTO application_steps (application_id, label, sort_order) VALUES (?, ?, ?)").bind(applicationId, "Başvuruyu gönder", 2),
       db.prepare("INSERT INTO application_steps (application_id, label, sort_order) VALUES (?, ?, ?)").bind(applicationId, "Geri dönüşü kaydet", 3),
     ]);
-    apps.push({ id: applicationId, company: candidate.company, role: candidate.role, notes, contactEmail: candidate.contactEmail, gmailMessageId: id, gmailThreadId: message.threadId ?? null, status: "waiting" });
+    apps.push({ id: applicationId, company: candidate.company, role: candidate.role, notes, contactEmail: candidate.contactEmail, gmailMessageId: id, gmailThreadId: message.threadId ?? null, status: "waiting", responseClassification: "none" });
     imported += 1;
   }
   return imported;
@@ -313,12 +320,12 @@ async function importReplies(db: Database, state: TokenState, ids: string[], app
     const combined = `${subject} ${body}`;
     const confirmation = isInterviewConfirmation([{ title: subject, body }]);
     const interviewDetails = getInterviewDetails([{ title: subject, body }]);
-    const status = responseStatus(combined);
-    const nextStatus = status === "received" && application.status === "interview" ? "interview" : status;
+    const response = responseStatus(combined);
+    const nextStatus = response.status;
     const title = confirmation ? `Gmail yanıtı (Mülakat teyidi): ${subject}` : `Gmail yanıtı: ${subject}`;
     const statements = [
       db.prepare("INSERT INTO application_updates (application_id, update_type, title, body, happened_on, gmail_message_id) VALUES (?, 'E-posta', ?, ?, ?, ?)").bind(application.id, title.slice(0, 250), body || subject, date, id),
-      db.prepare("UPDATE applications SET feedback = ?, last_contact_on = ? WHERE id = ?").bind(body || subject, date, application.id),
+      db.prepare("UPDATE applications SET feedback = ?, last_contact_on = ?, status = 'received', response_classification = ? WHERE id = ?").bind(body || subject, date, response.responseClassification, application.id),
     ];
     if (!application.gmailThreadId && message.threadId) {
       statements.push(db.prepare("UPDATE applications SET gmail_thread_id = ? WHERE id = ?").bind(message.threadId, application.id));
@@ -329,9 +336,10 @@ async function importReplies(db: Database, state: TokenState, ids: string[], app
         VALUES (?, ?, 60, ?)`)
         .bind(application.id, `${interviewDetails.date}T${interviewDetails.time}`, "Gmail daveti/teyidinden otomatik oluşturuldu."));
     }
-    statements.push(db.prepare("UPDATE applications SET status = ?, next_action = CASE WHEN ? = 'rejected' THEN 'Başka işlem gerekmiyor' WHEN ? = 'interview' AND ? = 1 THEN 'Mülakat teyit edildi; görüşmeye hazırlan' ELSE next_action END WHERE id = ?").bind(nextStatus, nextStatus, nextStatus, confirmation ? 1 : 0, application.id));
+    statements.push(db.prepare("UPDATE applications SET status = 'received', response_classification = ?, next_action = CASE WHEN ? = 'rejected' THEN 'Başka işlem gerekmiyor' WHEN ? = 'interview' AND ? = 1 THEN 'Mülakat teyit edildi; görüşmeye hazırlan' ELSE next_action END WHERE id = ?").bind(response.responseClassification, response.responseClassification, response.responseClassification, confirmation ? 1 : 0, application.id));
     await db.batch(statements);
     application.status = nextStatus;
+    application.responseClassification = response.responseClassification;
     updates += 1;
   }
   return updates;
@@ -348,7 +356,7 @@ export async function syncGmailApplications(db: Database, sessionId: string | nu
     if (!claimed.meta.changes) return { connected: true, imported: 0, updates: 0 };
 
     const state: TokenState = { accessToken: connection.accessToken, refreshToken: connection.refreshToken, sessionId };
-    const appsResult = await db.prepare("SELECT id, company, role, notes, contact_email AS contactEmail, gmail_message_id AS gmailMessageId, gmail_thread_id AS gmailThreadId, status FROM applications WHERE deleted_at IS NULL").all<StoredApplication>();
+    const appsResult = await db.prepare("SELECT id, company, role, notes, contact_email AS contactEmail, gmail_message_id AS gmailMessageId, gmail_thread_id AS gmailThreadId, status, response_classification AS responseClassification FROM applications WHERE deleted_at IS NULL").all<StoredApplication>();
     const apps = appsResult.results;
     const sentIds = await listMessages(db, state, "in:sent newer_than:180d");
     const imported = await importSentMessages(db, state, sentIds, apps);

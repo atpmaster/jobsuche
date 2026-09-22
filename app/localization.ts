@@ -31,6 +31,29 @@ export const statusLabels: Record<Language, Record<string, string>> = {
   },
 };
 
+export const responseClassificationLabels: Record<Language, Record<string, string>> = {
+  tr: {
+    none: "Henüz sınıflandırılmadı",
+    acknowledgement: "Başvuru alındı teyidi",
+    under_review: "İnceleniyor / süreçte",
+    interview: "Mülakat daveti",
+    rejected: "Ret / olumsuz cevap",
+    positive: "Olumlu cevap",
+    documents: "Ek belge / bilgi talebi",
+    other: "Genel cevap",
+  },
+  de: {
+    none: "Noch nicht klassifiziert",
+    acknowledgement: "Eingangsbestätigung",
+    under_review: "In Prüfung / im Verfahren",
+    interview: "Vorstellungsgespräch-Einladung",
+    rejected: "Absage / negative Rückmeldung",
+    positive: "Positive Rückmeldung",
+    documents: "Zusätzliche Unterlagen / Informationen angefordert",
+    other: "Allgemeine Rückmeldung",
+  },
+};
+
 type Translation = Record<Language, string>;
 
 const sourceTranslations: Record<string, Translation> = {
