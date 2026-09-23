@@ -1,11 +1,12 @@
 import { env } from "cloudflare:workers";
+import { getGmailRedirectUri } from "../../../gmail-redirect";
 import { getGmailSessionId, gmailSessionCookie, newGmailSessionId } from "../../../gmail-session";
 
 export async function GET(request: Request) {
-  const url = new URL(request.url);
   const clientId = (env as Record<string, string | undefined>).GOOGLE_CLIENT_ID;
-  const redirectUri = (env as Record<string, string | undefined>).GOOGLE_REDIRECT_URI;
-  if (!clientId || !redirectUri) return new Response("Gmail bağlantısı henüz yapılandırılmadı.", { status: 503 });
+  const configuredRedirectUri = (env as Record<string, string | undefined>).GOOGLE_REDIRECT_URI;
+  const redirectUri = getGmailRedirectUri(request, configuredRedirectUri);
+  if (!clientId) return new Response("Gmail bağlantısı henüz yapılandırılmadı.", { status: 503 });
   const sessionId = getGmailSessionId(request) ?? newGmailSessionId();
   const auth = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   auth.searchParams.set("client_id", clientId);

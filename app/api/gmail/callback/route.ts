@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { getGmailRedirectUri } from "../../../gmail-redirect";
 import { getGmailSessionId, gmailSessionCookie } from "../../../gmail-session";
 
 export async function GET(request: Request) {
@@ -10,6 +11,7 @@ export async function GET(request: Request) {
   const sessionId = getGmailSessionId(request);
   if (!sessionId || !state || state !== sessionId) return new Response("Gmail bağlantısı doğrulanamadı. Lütfen bu tarayıcıdan yeniden bağlanın.", { status: 400 });
   const runtime = env as Record<string, string | undefined>;
+  const redirectUri = getGmailRedirectUri(request, runtime.GOOGLE_REDIRECT_URI);
   const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -17,7 +19,7 @@ export async function GET(request: Request) {
       code,
       client_id: runtime.GOOGLE_CLIENT_ID ?? "",
       client_secret: runtime.GOOGLE_CLIENT_SECRET ?? "",
-      redirect_uri: runtime.GOOGLE_REDIRECT_URI ?? url.origin + "/api/gmail/callback",
+      redirect_uri: redirectUri,
       grant_type: "authorization_code",
     }),
   });
