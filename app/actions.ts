@@ -6,7 +6,8 @@ import { isDuplicate } from "./record-utils";
 import { getCareerData } from "./career-actions";
 import { syncGmailApplications } from "./gmail-sync";
 import { GMAIL_SESSION_COOKIE } from "./gmail-session";
-import { isConfirmedInterview } from "./interview-utils";
+import { getInterviewDetails, isConfirmedInterview, isJobRejectionResponse, isRejectionResponse } from "./interview-utils";
+import { classifyResponse, isPendingApplicationNote, isResponseClassification, type ResponseClassification } from "./response-classification";
 import { cookies } from "next/headers";
 
 type Application = {
@@ -18,6 +19,7 @@ type Application = {
   location: string | null;
   score: number;
   status: string;
+  responseClassification: ResponseClassification;
   deadline: string | null;
   url: string | null;
   notes: string | null;
@@ -31,6 +33,7 @@ type Application = {
   nextActionDate: string | null;
   feedback: string | null;
   gmailMessageId: string | null;
+  gmailThreadId: string | null;
 };
 
 type Task = { id: number; title: string; category: string; estimate: string; done: number };
@@ -39,18 +42,22 @@ type Task = { id: number; title: string; category: string; estimate: string; don
 // records are migrated below, so older forms cannot corrupt an application.
 const statuses = new Set(["new", "listed", "sent", "waiting", "received", "withdrawn", "saved", "preparing", "applied", "interview", "offer", "rejected"]);
 const interviewNextAction = "Mülakat tarihini ve bağlantısını doğrula; görüşmeye hazırlan";
+const rejectionNextAction = "Başka işlem gerekmiyor";
 const waitingNextAction = "Geri dönüşü bekle";
 const genericWaitingActionPattern = /(geri dönüş|rückmeldung|eingangsbestätigung|bekle|abwarten|prüf|kontroll)/i;
+
 const canonicalStatus = (value: string) => ({
   saved: "new",
   preparing: "listed",
   applied: "waiting",
   offer: "received",
+  interview: "received",
   rejected: "received",
 }[value] ?? value);
 
 function nextActionForStatus(status: string, value: string | null) {
   const action = value?.trim() ?? "";
+  if (status === "rejected") return rejectionNextAction;
   if (status === "interview" && (!action || genericWaitingActionPattern.test(action))) return interviewNextAction;
   return action || null;
 }
@@ -77,7 +84,7 @@ async function ensureColumn(db: D1Database, table: string, column: string, defin
 async function prepareDb() {
   const db = env.DB;
   await db.batch([
-    db.prepare(`CREATE TABLE IF NOT EXISTS applications (id INTEGER PRIMARY KEY AUTOINCREMENT, company TEXT NOT NULL, role TEXT NOT NULL, track TEXT NOT NULL DEFAULT 'other', location TEXT, score INTEGER NOT NULL DEFAULT 50 CHECK(score BETWEEN 0 AND 100), status TEXT NOT NULL DEFAULT 'new', deadline TEXT, url TEXT, notes TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS applications (id INTEGER PRIMARY KEY AUTOINCREMENT, company TEXT NOT NULL, role TEXT NOT NULL, track TEXT NOT NULL DEFAULT 'other', location TEXT, score INTEGER NOT NULL DEFAULT 50 CHECK(score BETWEEN 0 AND 100), status TEXT NOT NULL DEFAULT 'new', response_classification TEXT NOT NULL DEFAULT 'none', deadline TEXT, url TEXT, notes TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`),
     db.prepare(`CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, category TEXT NOT NULL DEFAULT 'Kariyer', estimate TEXT NOT NULL DEFAULT '30 dk', done INTEGER NOT NULL DEFAULT 0, sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`),
     db.prepare(`CREATE TABLE IF NOT EXISTS application_steps (id INTEGER PRIMARY KEY AUTOINCREMENT, application_id INTEGER NOT NULL, label TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0, sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`),
     db.prepare(`CREATE TABLE IF NOT EXISTS application_updates (id INTEGER PRIMARY KEY AUTOINCREMENT, application_id INTEGER NOT NULL, update_type TEXT NOT NULL DEFAULT 'Not', title TEXT NOT NULL, body TEXT, happened_on TEXT NOT NULL DEFAULT CURRENT_DATE, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`),
@@ -85,6 +92,8 @@ async function prepareDb() {
     db.prepare(`CREATE TABLE IF NOT EXISTS gmail_sync_state (id INTEGER PRIMARY KEY, last_sync_at TEXT, last_attempt_at TEXT, last_error TEXT, messages_imported INTEGER NOT NULL DEFAULT 0)`),
     db.prepare(`CREATE TABLE IF NOT EXISTS gmail_connections (session_id TEXT PRIMARY KEY, access_token TEXT NOT NULL, refresh_token TEXT, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`),
     db.prepare(`CREATE TABLE IF NOT EXISTS gmail_sync_states (session_id TEXT PRIMARY KEY, last_sync_at TEXT, last_attempt_at TEXT, last_error TEXT, messages_imported INTEGER NOT NULL DEFAULT 0)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS google_calendar_events (application_id INTEGER PRIMARY KEY, provider_event_id TEXT NOT NULL, web_view_link TEXT, starts_at TEXT NOT NULL, duration INTEGER NOT NULL DEFAULT 60, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS google_drive_folders (application_id INTEGER PRIMARY KEY, provider_file_id TEXT NOT NULL, web_view_link TEXT, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`),
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status)`),
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_tasks_done_sort ON tasks(done, sort_order)`),
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_application_steps_app ON application_steps(application_id, sort_order)`),
@@ -102,6 +111,8 @@ async function prepareDb() {
     ensureColumn(db, "applications", "next_action_date", "TEXT"),
     ensureColumn(db, "applications", "feedback", "TEXT"),
     ensureColumn(db, "applications", "gmail_message_id", "TEXT"),
+    ensureColumn(db, "applications", "gmail_thread_id", "TEXT"),
+    ensureColumn(db, "applications", "response_classification", "TEXT NOT NULL DEFAULT 'none'"),
     ensureColumn(db, "application_updates", "gmail_message_id", "TEXT"),
   ]);
 
@@ -109,10 +120,63 @@ async function prepareDb() {
     db.prepare("UPDATE applications SET status = 'new' WHERE status = 'saved'"),
     db.prepare("UPDATE applications SET status = 'listed' WHERE status = 'preparing'"),
     db.prepare("UPDATE applications SET status = 'waiting' WHERE status = 'applied'"),
-    db.prepare("UPDATE applications SET status = 'received' WHERE status IN ('offer', 'rejected')"),
+    db.prepare("UPDATE applications SET status = 'received' WHERE status = 'offer'"),
     db.prepare("UPDATE applications SET status = 'received' WHERE status IN ('new', 'listed', 'sent', 'waiting') AND id IN (SELECT application_id FROM application_updates WHERE title LIKE 'Gmail yanıtı:%')"),
     db.prepare("UPDATE applications SET next_action = ? WHERE status = 'interview' AND (next_action IS NULL OR lower(next_action) LIKE '%geri dönüş%' OR lower(next_action) LIKE '%rückmeldung%' OR lower(next_action) LIKE '%bekle%' OR lower(next_action) LIKE '%abwarten%' OR lower(next_action) LIKE '%eingangsbestätigung%')").bind(interviewNextAction),
   ]);
+
+  // Keep the simple workflow status separate from the result of a received
+  // message. Older versions stored interview/rejection as the main status;
+  // migrate those records once the classification column is available.
+  const classificationRows = await db.prepare(`SELECT a.id, a.status, a.response_classification AS responseClassification, a.feedback,
+      COALESCE((SELECT group_concat(COALESCE(u.title, '') || ' ' || COALESCE(u.body, ''), ' ')
+        FROM application_updates u WHERE u.application_id = a.id), '') AS updatesText
+    FROM applications a WHERE a.deleted_at IS NULL`).all<{
+      id: number; status: string; responseClassification: string | null; feedback: string | null; updatesText: string | null;
+    }>();
+  const classificationRepairs = classificationRows.results.flatMap((row) => {
+    const text = `${row.feedback || ""} ${row.updatesText || ""}`.trim();
+    const pendingNote = isPendingApplicationNote(text);
+    const inferred = pendingNote ? "none" : row.status === "interview" ? "interview" : row.status === "rejected" ? "rejected" : classifyResponse(text);
+    const classification = pendingNote ? "none" : isResponseClassification(row.responseClassification) && row.responseClassification !== "none"
+      ? row.responseClassification
+      : inferred;
+    const status = pendingNote && (row.status === "received" || row.responseClassification === "other")
+      ? "waiting"
+      : ["interview", "rejected"].includes(row.status) || classification !== "none" ? "received" : row.status;
+    if (status === row.status && classification === (row.responseClassification || "none")) return [];
+    return [db.prepare("UPDATE applications SET status = ?, response_classification = ? WHERE id = ?").bind(status, classification, row.id)];
+  });
+  if (classificationRepairs.length) await db.batch(classificationRepairs);
+
+  // This is a known non-application Gmail record. Keep it recoverable in the
+  // database but exclude it from the application workspace and reports.
+  await db.prepare(`UPDATE applications
+    SET feedback = 'Gelen cevap; ayrı bir başvuru değil.', response_classification = 'none'
+    WHERE company = 'Gmail' AND role LIKE '%AD-5414554833%' AND (feedback IS NULL OR feedback NOT LIKE 'Gelen cevap; ayrı bir başvuru değil.%')`).run();
+
+  // This automated mailbox message is not a verified rejection. Keep it in
+  // the waiting workflow until the employer's actual result is known.
+  await db.prepare(`UPDATE applications
+    SET status = 'waiting', response_classification = 'none', next_action = 'Geri dönüşü doğrula'
+    WHERE company = 'Bewerbermanagement' AND role = 'Ihre Bewerbung' AND deleted_at IS NULL`).run();
+
+  // Older versions stored every non-interview reply as `received`. Promote
+  // clear rejection replies so the result is visible without opening a row.
+  const responseRows = await db.prepare(`SELECT a.id, a.feedback,
+      COALESCE((SELECT su.title FROM application_updates su
+        WHERE su.application_id = a.id AND su.update_type = 'Durum'
+        ORDER BY su.id DESC LIMIT 1), '') AS latestStatusUpdate,
+      COALESCE((SELECT group_concat(COALESCE(u.title, '') || ' ' || COALESCE(u.body, ''), ' ')
+        FROM application_updates u WHERE u.application_id = a.id), '') AS updatesText
+    FROM applications a WHERE a.status = 'received' AND (a.feedback IS NOT NULL OR EXISTS
+      (SELECT 1 FROM application_updates u WHERE u.application_id = a.id))`)
+    .all<{ id: number; feedback: string | null; latestStatusUpdate: string; updatesText: string | null }>();
+  const rejectionRepairs = responseRows.results
+    .filter((row) => !/^Durum:\s*(received|waiting)$/i.test(row.latestStatusUpdate.trim()))
+    .filter((row) => isJobRejectionResponse(`${row.feedback || ""} ${row.updatesText || ""}`))
+    .map((row) => db.prepare("UPDATE applications SET status = 'received', response_classification = 'rejected', next_action = ? WHERE id = ?").bind(rejectionNextAction, row.id));
+  if (rejectionRepairs.length) await db.batch(rejectionRepairs);
 
   // An interview is shown only when a concrete date and time are present in
   // the invitation text. This also repairs older false positives created by
@@ -125,25 +189,31 @@ async function prepareDb() {
     // The interview invitation text remains the source of truth if the
     // optional calendar table is unavailable.
   }
-  const interviewRows = await db.prepare(`SELECT a.id, a.status, a.next_action AS nextAction,
+  const interviewRows = await db.prepare(`SELECT a.id, a.status, a.response_classification AS responseClassification, a.next_action AS nextAction,
       u.title, u.body
     FROM applications a
     LEFT JOIN application_updates u ON u.application_id = a.id
     WHERE a.deleted_at IS NULL
-    ORDER BY a.id, u.id`).all<{ id: number; status: string; nextAction: string | null; title: string | null; body: string | null }>();
-  const interviewGroups = new Map<number, { status: string; nextAction: string | null; updates: { title: string | null; body: string | null }[] }>();
+    ORDER BY a.id, u.id`).all<{ id: number; status: string; responseClassification: string | null; nextAction: string | null; title: string | null; body: string | null }>();
+  const interviewGroups = new Map<number, { status: string; responseClassification: string | null; nextAction: string | null; updates: { title: string | null; body: string | null }[] }>();
   for (const row of interviewRows.results) {
-    const current = interviewGroups.get(row.id) || { status: row.status, nextAction: row.nextAction, updates: [] };
+    const current = interviewGroups.get(row.id) || { status: row.status, responseClassification: row.responseClassification, nextAction: row.nextAction, updates: [] };
     if (row.title || row.body) current.updates.push({ title: row.title, body: row.body });
     interviewGroups.set(row.id, current);
   }
   const interviewRepairs = [];
   for (const [id, application] of interviewGroups) {
     const confirmed = isConfirmedInterview(application.updates, interviewEvents.get(id));
+    const details = getInterviewDetails(application.updates, interviewEvents.get(id));
+    if (confirmed && !interviewEvents.has(id) && details) {
+      interviewRepairs.push(db.prepare("INSERT OR IGNORE INTO interviews (application_id, starts_at, duration, notes) VALUES (?, ?, 60, ?)")
+        .bind(id, `${details.date}T${details.time}`, "Gmail daveti/teyidinden otomatik oluşturuldu."));
+      interviewEvents.set(id, `${details.date}T${details.time}`);
+    }
     if (confirmed && ["new", "listed", "sent", "waiting", "received"].includes(application.status)) {
-      interviewRepairs.push(db.prepare("UPDATE applications SET status = 'interview', next_action = ? WHERE id = ?").bind(nextActionForStatus("interview", application.nextAction), id));
-    } else if (!confirmed && application.status === "interview") {
-      interviewRepairs.push(db.prepare("UPDATE applications SET status = 'waiting', next_action = ? WHERE id = ?").bind(waitingNextAction, id));
+      interviewRepairs.push(db.prepare("UPDATE applications SET status = 'received', response_classification = 'interview', next_action = ? WHERE id = ?").bind(nextActionForStatus("interview", application.nextAction), id));
+    } else if (!confirmed && (application.status === "interview" || application.responseClassification === "interview")) {
+      interviewRepairs.push(db.prepare("UPDATE applications SET status = 'waiting', response_classification = 'none', next_action = ? WHERE id = ?").bind(waitingNextAction, id));
     } else if (confirmed && application.status === "interview") {
       const nextAction = nextActionForStatus("interview", application.nextAction);
       if (nextAction !== application.nextAction) interviewRepairs.push(db.prepare("UPDATE applications SET next_action = ? WHERE id = ?").bind(nextAction, id));
@@ -267,9 +337,21 @@ export async function getDashboardData() {
   const cookieStore = await cookies();
   const gmailSessionId = cookieStore.get(GMAIL_SESSION_COOKIE)?.value ?? null;
   const gmailSync = await syncGmailApplications(db, gmailSessionId);
+  const today = new Date().toISOString().slice(0, 10);
+  // Turn due follow-ups into durable tasks when the workspace is opened. The
+  // title is stable so refreshing the dashboard never creates duplicates.
+  await db.prepare(`INSERT INTO tasks (title, category, estimate, sort_order)
+    SELECT 'Takip: ' || company || ' – ' || role, 'Başvuru takibi', '15 dk', 1
+    FROM applications
+    WHERE deleted_at IS NULL AND next_action_date IS NOT NULL AND next_action_date <= ?
+      AND status IN ('new', 'listed', 'sent', 'waiting', 'received', 'interview')
+      AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.title = 'Takip: ' || applications.company || ' – ' || applications.role AND t.done = 0)`)
+    .bind(today).run();
   const career = await getCareerData();
   const [apps, tasks, updates, steps] = await Promise.all([
-    db.prepare(`SELECT id, deleted_at AS deletedAt, company, role, track, location, score, status, deadline, url, notes, source, applied_on AS appliedOn, contact_name AS contactName, contact_email AS contactEmail, contact_phone AS contactPhone, last_contact_on AS lastContactOn, next_action AS nextAction, next_action_date AS nextActionDate, feedback, gmail_message_id AS gmailMessageId
+    db.prepare(`SELECT id, deleted_at AS deletedAt, company, role, track, location, score, status, response_classification AS responseClassification, deadline, url, notes, source, applied_on AS appliedOn, contact_name AS contactName, contact_email AS contactEmail, contact_phone AS contactPhone, last_contact_on AS lastContactOn, next_action AS nextAction, next_action_date AS nextActionDate, feedback, gmail_message_id AS gmailMessageId, gmail_thread_id AS gmailThreadId,
+        (SELECT web_view_link FROM google_calendar_events ce WHERE ce.application_id = applications.id) AS calendarEventUrl,
+        (SELECT web_view_link FROM google_drive_folders df WHERE df.application_id = applications.id) AS driveFolderUrl
       FROM applications ORDER BY COALESCE(applied_on, created_at) DESC, id DESC`).all<Application>(),
     db.prepare("SELECT id, title, category, estimate, done FROM tasks ORDER BY done ASC, sort_order ASC, id ASC LIMIT 8").all<Task>(),
     db.prepare("SELECT id, application_id AS applicationId, update_type AS updateType, title, body, happened_on AS happenedOn FROM application_updates ORDER BY happened_on DESC, id DESC").all<{ id: number; applicationId: number; updateType: string; title: string; body: string | null; happenedOn: string }>(),
@@ -298,13 +380,15 @@ export async function addApplication(formData: FormData) {
   const score = Math.max(0, Math.min(100, Number(formData.get("score")) || 50));
   const requestedStatus = String(formData.get("status") || "new");
   const requestedCanonicalStatus = statuses.has(requestedStatus) ? canonicalStatus(requestedStatus) : "new";
-  const status = requestedCanonicalStatus === "interview" ? "waiting" : requestedCanonicalStatus;
+  const requestedClassification = String(formData.get("responseClassification") || "none");
+  const responseClassification = isResponseClassification(requestedClassification) ? requestedClassification : (requestedStatus === "interview" ? "interview" : requestedStatus === "rejected" ? "rejected" : "none");
+  const status = responseClassification !== "none" ? "received" : requestedCanonicalStatus;
   const nextAction = nextActionForStatus(status, String(formData.get("nextAction") || ""));
-  await db.prepare(`INSERT INTO applications (company, role, track, location, score, status, deadline, url, notes, source, applied_on, contact_name, contact_email, contact_phone, next_action, next_action_date)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+  await db.prepare(`INSERT INTO applications (company, role, track, location, score, status, response_classification, deadline, url, notes, source, applied_on, contact_name, contact_email, contact_phone, next_action, next_action_date)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(
       formData.get("company"), formData.get("role"), formData.get("track"), formData.get("location") || null, score,
-      status, formData.get("deadline") || null, formData.get("url") || null, formData.get("notes") || null,
+       status, responseClassification, formData.get("deadline") || null, formData.get("url") || null, formData.get("notes") || null,
       formData.get("source") || null, formData.get("appliedOn") || null, formData.get("contactName") || null, formData.get("contactEmail") || null,
       formData.get("contactPhone") || null, nextAction, formData.get("nextActionDate") || null,
     ).run();
@@ -317,8 +401,15 @@ export async function updateApplicationStatus(formData: FormData) {
   if (!statuses.has(requestedStatus)) return;
   const requestedCanonicalStatus = canonicalStatus(requestedStatus);
   const id = Number(formData.get("id"));
-  const status = requestedCanonicalStatus === "interview" && !(await hasConfirmedInterview(db, id)) ? "waiting" : requestedCanonicalStatus;
-  await db.prepare("UPDATE applications SET status = ?, next_action = CASE WHEN ? = 'interview' AND (next_action IS NULL OR lower(next_action) LIKE '%geri dönüş%' OR lower(next_action) LIKE '%rückmeldung%' OR lower(next_action) LIKE '%bekle%' OR lower(next_action) LIKE '%abwarten%') THEN ? ELSE next_action END, last_contact_on = CASE WHEN ? IN ('received', 'interview') THEN CURRENT_DATE ELSE last_contact_on END WHERE id = ?").bind(status, status, status === "interview" ? interviewNextAction : null, status, id).run();
+  const current = await db.prepare("SELECT response_classification AS responseClassification FROM applications WHERE id = ? AND deleted_at IS NULL").bind(id).first<{ responseClassification: string | null }>();
+  const requestedClassification = String(formData.get("responseClassification") || "");
+  const responseClassification = requestedCanonicalStatus === "received"
+    ? (isResponseClassification(requestedClassification) ? requestedClassification : (isResponseClassification(current?.responseClassification) ? current?.responseClassification : "none"))
+    : (requestedStatus === "interview" ? "interview" : requestedStatus === "rejected" ? "rejected" : "none");
+  const effectiveResponseClassification = responseClassification === "interview" && !(await hasConfirmedInterview(db, id)) ? "none" : responseClassification;
+  const status = effectiveResponseClassification !== "none" ? "received" : requestedCanonicalStatus;
+  const nextAction = nextActionForStatus(status, null);
+  await db.prepare("UPDATE applications SET status = ?, response_classification = ?, next_action = CASE WHEN ? = 'received' AND ? IN ('rejected', 'interview') THEN ? ELSE next_action END, last_contact_on = CASE WHEN ? = 'received' THEN CURRENT_DATE ELSE last_contact_on END WHERE id = ?").bind(status, effectiveResponseClassification, status, effectiveResponseClassification, effectiveResponseClassification === "rejected" ? rejectionNextAction : interviewNextAction, status, id).run();
   await db.prepare("INSERT INTO application_updates (application_id, update_type, title, body) VALUES (?, 'Durum', ?, ?)").bind(id, `Durum: ${status}`, `Başvuru durumu ${status} olarak güncellendi.`).run();
   revalidatePath("/");
 }
@@ -328,6 +419,11 @@ export async function updateApplicationRecord(formData: FormData) {
   const id = Number(formData.get("id"));
   const requestedStatus = String(formData.get("status") || "new");
   const requestedCanonicalStatus = canonicalStatus(requestedStatus);
+  const requestedClassification = String(formData.get("responseClassification") || "none");
+  const responseClassification = requestedCanonicalStatus === "received"
+    ? (isResponseClassification(requestedClassification) ? requestedClassification : "none")
+    : (requestedStatus === "interview" ? "interview" : requestedStatus === "rejected" ? "rejected" : "none");
+  const effectiveResponseClassification = responseClassification === "interview" && !(await hasConfirmedInterview(db, id)) ? "none" : responseClassification;
   const track = String(formData.get("track") || "other");
   const score = Math.max(0, Math.min(100, Number(formData.get("score")) || 50));
   const datePattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -335,12 +431,12 @@ export async function updateApplicationRecord(formData: FormData) {
   const nextActionDate = String(formData.get("nextActionDate") || "");
   if (!Number.isInteger(id) || !statuses.has(requestedStatus) || !["teaching", "cyber", "other"].includes(track)) return;
   if ((appliedOn && !datePattern.test(appliedOn)) || (nextActionDate && !datePattern.test(nextActionDate))) return;
-  const status = requestedCanonicalStatus === "interview" && !(await hasConfirmedInterview(db, id)) ? "waiting" : requestedCanonicalStatus;
+  const status = effectiveResponseClassification !== "none" ? "received" : requestedCanonicalStatus;
   const nextAction = nextActionForStatus(status, String(formData.get("nextAction") || ""));
-  await db.prepare(`UPDATE applications SET company = ?, role = ?, track = ?, location = ?, score = ?, status = ?, source = ?, applied_on = ?, next_action = ?, next_action_date = ?, contact_name = ?, contact_email = ?, notes = ?, feedback = ? WHERE id = ? AND deleted_at IS NULL`)
+  await db.prepare(`UPDATE applications SET company = ?, role = ?, track = ?, location = ?, score = ?, status = ?, response_classification = ?, source = ?, applied_on = ?, next_action = ?, next_action_date = ?, contact_name = ?, contact_email = ?, notes = ?, feedback = ? WHERE id = ? AND deleted_at IS NULL`)
     .bind(
       String(formData.get("company") || "").trim(), String(formData.get("role") || "").trim(), track,
-      String(formData.get("location") || "").trim() || null, score, status,
+       String(formData.get("location") || "").trim() || null, score, status, effectiveResponseClassification,
       String(formData.get("source") || "").trim() || null, appliedOn || null,
       nextAction, nextActionDate || null,
       String(formData.get("contactName") || "").trim() || null, String(formData.get("contactEmail") || "").trim() || null,
@@ -364,10 +460,14 @@ export async function addApplicationUpdate(formData: FormData) {
   const updateType = String(formData.get("updateType") || "Not");
   const body = String(formData.get("body") || "");
   const hasInterviewInvitation = isConfirmedInterview([{ title, body }]);
+  const responseText = `${title} ${body}`;
+  const hasRejection = isRejectionResponse(responseText);
+  const isResponseUpdate = updateType === "E-posta" || updateType === "E-Mail" || hasInterviewInvitation || hasRejection;
+  const responseClassification = isResponseUpdate ? classifyResponse(body, title) : "none";
   await db.batch([
     db.prepare("INSERT INTO application_updates (application_id, update_type, title, body, happened_on) VALUES (?, ?, ?, ?, ?)").bind(applicationId, updateType, title, body || null, date),
     db.prepare("UPDATE applications SET feedback = ?, last_contact_on = ? WHERE id = ?").bind(body || title, date, applicationId),
-    ...(hasInterviewInvitation ? [db.prepare("UPDATE applications SET status = 'interview', next_action = CASE WHEN next_action IS NULL OR lower(next_action) LIKE '%geri dönüş%' OR lower(next_action) LIKE '%rückmeldung%' OR lower(next_action) LIKE '%bekle%' OR lower(next_action) LIKE '%abwarten%' THEN ? ELSE next_action END WHERE id = ?").bind(interviewNextAction, applicationId)] : []),
+    ...(responseClassification !== "none" ? [db.prepare("UPDATE applications SET status = 'received', response_classification = ?, next_action = CASE WHEN ? = 'rejected' THEN ? WHEN ? = 'interview' THEN ? ELSE next_action END WHERE id = ?").bind(responseClassification, responseClassification, rejectionNextAction, responseClassification, interviewNextAction, applicationId)] : []),
   ]);
   revalidatePath("/");
 }
